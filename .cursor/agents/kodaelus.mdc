@@ -1,0 +1,17 @@
+---
+name: Kodaelus
+description: Project-local alias — prefer the global Kodaelus subagent after running npm run install:global
+model: composer-2.5
+---
+
+# Kodaelus (project stub)
+
+For use in **any** project without copying this repo, run once from the Kodaelus distribution folder:
+
+```bash
+npm run install:global
+```
+
+That installs `~/.cursor/agents/kodaelus.md` and `~/.cursor/kodaelus/instructions.md`. Select **kodaelus** from the agent menu in any workspace.
+
+When developing this repo only, you may also read `kodaelus/instructions.md` here.

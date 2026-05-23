@@ -1,0 +1,6 @@
+---
+description: Optional Kodaelus hint for this distribution repo only — global install does not add project rules elsewhere
+alwaysApply: false
+---
+
+If working in the Kodaelus distribution repo, see `kodaelus/instructions.md`. For all other projects, use the globally installed Kodaelus subagent (`npm run install:global` once).
