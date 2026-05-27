@@ -1,0 +1,17 @@
+Kodaelus
+Copyright (c) 2026 Joshua Grace
+
+This project includes or interoperates with third-party software and services.
+Use of those components is subject to their respective licenses and terms—not
+this repository's LICENSE file.
+
+Third-party dependencies (non-exhaustive)
+
+| Component    | Role              | Terms |
+|--------------|-------------------|-------|
+| Cursor IDE   | Host environment  | See https://cursor.com/terms (or current terms) |
+| @cursor/sdk  | Optional SDK CLI  | See npm package and Cursor SDK documentation |
+
+When you run `npm install` in `sdk/`, additional transitive dependencies are
+installed. Review their licenses in `sdk/node_modules/` before redistribution.
+You may not redistribute Kodaelus itself; see LICENSE.

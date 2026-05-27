@@ -32,6 +32,7 @@ Set-Content -Path $agentDest -Value $agentBody -Encoding UTF8 -NoNewline
 Copy-Item -Path $TemplateSkill -Destination $skillDest -Force
 
 Write-Host "Kodaelus installed for all Cursor projects."
+Write-Host "  Use is subject to the Kodaelus Proprietary License (LICENSE in this repo)."
 Write-Host "  Instructions: $instructionsDest"
 Write-Host "  Subagent:     $agentDest"
 Write-Host "  Skill:        $skillDest"

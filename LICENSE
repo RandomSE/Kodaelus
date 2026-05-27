@@ -1,7 +1,132 @@
-Copyright (c) 2026 Joshua Grace
+Kodaelus Proprietary License
+Version 1.0 — May 2026
 
-All rights reserved.
+Copyright (c) 2026 Joshua Grace. All rights reserved.
 
-This repository is private. No part of this software may be copied,
-modified, distributed, or used outside authorized access to this
-repository without explicit written permission from the copyright holder.
+IMPORTANT — READ CAREFULLY: By accessing, cloning, downloading, installing, or
+using any part of this software (the "Software"), you agree to be bound by
+this license. If you do not agree, do not access or use the Software.
+
+1. Definitions
+
+   1.1 "Licensor" means Joshua Grace, the copyright holder of the Software.
+
+   1.2 "Software" means the Kodaelus repository and all materials included
+       therein or made available therefrom, including without limitation source
+       code, object code, agent instructions, documentation, installer scripts,
+       templates, configuration files, and associated media.
+
+   1.3 "You" means the individual or legal entity exercising permissions under
+       this license.
+
+2. Grant of License
+
+   Subject to your compliance with this license, Licensor grants You a limited,
+   non-exclusive, non-transferable, revocable license to:
+
+   (a) obtain a copy of the Software from a source made available by Licensor
+       or with Licensor's express written permission;
+
+   (b) install and run the Software on devices You control, including the global
+       install into your Cursor user profile; and
+
+   (c) use the Software solely for Your own internal or personal software
+       development purposes in connection with Cursor or compatible tooling.
+
+   No other rights are granted. All rights not expressly granted are reserved.
+
+3. Restrictions
+
+   You shall not, and shall not permit any third party to:
+
+   (a) redistribute, republish, mirror, sublicense, lease, lend, host for
+       others, or otherwise make the Software (or any portion thereof) available
+       to any third party;
+
+   (b) sell, offer for sale, or commercialize the Software or any derivative
+       product or service whose primary value derives from the Software;
+
+   (c) remove, alter, or obscure any copyright, trademark, or proprietary
+       notices;
+
+   (d) modify the Software and distribute, publish, or otherwise disclose such
+       modifications, except for local changes that remain on Your devices and
+       are not shared with others;
+
+   (e) use the name "Kodaelus," Licensor's trademarks, or branding to imply
+       endorsement, affiliation, or origin other than as permitted by Licensor
+       in writing;
+
+   (f) use the Software in any manner that violates applicable law or the terms
+       of any third-party service (including Cursor and its SDK) that You use
+       with the Software.
+
+4. Reservation of Rights and Licensor Discretion
+
+   The Software is licensed, not sold. Licensor retains all right, title, and
+   interest in and to the Software, including all intellectual property rights.
+
+   Licensor may, in Licensor's sole and absolute discretion, at any time and
+   without prior notice: modify or discontinue the Software; change the terms
+   of this license; grant or revoke exceptions to any person or entity; and
+   pursue any remedies available for breach. Your continued use after updated
+   terms are posted or otherwise made available constitutes acceptance of those
+   terms to the extent permitted by law.
+
+5. Third-Party Components
+
+   The Software may depend on or interoperate with third-party software and
+   services (for example, Cursor and @cursor/sdk). Those components are not
+   licensed under this agreement and remain subject to their own terms. You are
+   responsible for compliance with all applicable third-party licenses and
+   service terms.
+
+6. Disclaimer of Warranties
+
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTY OF ANY
+   KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WITHOUT LIMITATION
+   WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+   NON-INFRINGEMENT. LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE
+   ERROR-FREE, UNINTERRUPTED, SECURE, OR MEET YOUR REQUIREMENTS.
+
+7. Limitation of Liability
+
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL
+   LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
+   EXEMPLARY, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, GOODWILL, OR
+   BUSINESS INTERRUPTION, ARISING OUT OF OR RELATED TO THE SOFTWARE OR THIS
+   LICENSE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+   LICENSOR'S TOTAL AGGREGATE LIABILITY FOR ANY CLAIM ARISING OUT OF OR RELATED
+   TO THE SOFTWARE OR THIS LICENSE SHALL NOT EXCEED ONE HUNDRED U.S. DOLLARS
+   (US $100.00), OR THE MINIMUM AMOUNT REQUIRED TO BE ENFORCEABLE UNDER
+   APPLICABLE LAW, WHICHEVER IS GREATER.
+
+8. Termination
+
+   This license terminates automatically upon Your breach of any term. Upon
+   termination, You must cease all use of the Software and destroy all copies
+   in Your possession or control. Sections that by their nature should survive
+   termination shall survive (including Sections 3–7 and 9).
+
+9. General
+
+   9.1 This license constitutes the entire agreement regarding the Software
+       and supersedes prior understandings on that subject.
+
+   9.2 If any provision is held unenforceable, the remaining provisions remain
+       in full force and effect.
+
+   9.3 No waiver of any term shall be deemed a further or continuing waiver.
+
+   9.4 You may not assign this license without Licensor's prior written consent.
+       Licensor may assign this license without restriction.
+
+   9.5 This license is governed by the laws of the United States and the State
+       in which Licensor principally resides, without regard to conflict-of-law
+       rules. Exclusive venue for disputes relating to this license shall lie in
+       the courts of that State, unless otherwise required by mandatory law.
+
+For licensing inquiries or written permission beyond this license, contact the
+copyright holder through the repository's official issue tracker or contact
+method published by Licensor.
