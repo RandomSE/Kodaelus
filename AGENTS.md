@@ -1,6 +1,6 @@
 # Kodaelus
 
-Agent distribution — not required inside consumer projects.
+Agent distribution — not required inside consumer projects. Use is governed by [LICENSE](LICENSE) (no redistribution or sale).
 
 ## One-time setup
 

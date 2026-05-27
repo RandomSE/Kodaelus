@@ -54,6 +54,7 @@ writeFileSync(join(agentsDir, "kodaelus.md"), agentBody, "utf8");
 cpSync(templateSkill, join(skillsDir, "SKILL.md"));
 
 console.log("Kodaelus installed for all Cursor projects.");
+console.log("  Use is subject to the Kodaelus Proprietary License (LICENSE in this repo).");
 console.log(`  Instructions: ${join(globalKodaelus, "instructions.md")}`);
 console.log(`  Subagent:     ${join(agentsDir, "kodaelus.md")}`);
 console.log(`  Skill:        ${join(skillsDir, "SKILL.md")}`);
