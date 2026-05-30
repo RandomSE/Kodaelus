@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "node ./hooks/kodaelus-session.mjs"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "node ./hooks/kodaelus-session.mjs",
+        "matcher": "kodaelus"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node ./hooks/kodaelus-session.mjs"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node ./hooks/block-git-when-kodaelus.mjs",
+        "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow)\\b"
+      }
+    ]
+  }
+}

@@ -19,6 +19,8 @@ This writes:
 | `~/.cursor/kodaelus/instructions.md` | Canonical policy (edit on reinstall) |
 | `~/.cursor/agents/kodaelus.md` | Subagent available in all projects |
 | `~/.cursor/skills/kodaelus/SKILL.md` | Skill when you ask for Kodaelus in chat |
+| `~/.cursor/rules/kodaelus-session.mdc` | Session lock rule (keeps Kodaelus active in chat) |
+| `~/.cursor/hooks.json` + `~/.cursor/hooks/` | Git block + session tracking hooks |
 
 **Windows (PowerShell alternative):** `.\install\install.ps1`
 
@@ -28,6 +30,8 @@ This writes:
 
 1. Open any repo in Cursor (no Kodaelus files required in that repo).
 2. Ask the main agent to use Kodaelus.
+
+Say **stop kodaelus** to end session lock. Git commands are hook-blocked while Kodaelus is active in a chat.
 
 
 ## Layout

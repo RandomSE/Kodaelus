@@ -99,6 +99,18 @@ describe("loadInstructions", () => {
     });
     expect(content).toContain("Kodaelus");
   });
+
+  it("includes required policy sections in distribution instructions", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    const content = await loadInstructions({
+      cwd: repoRoot,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+    });
+    expect(content).toContain("## Process Framework");
+    expect(content).toContain("## Session Lock");
+    expect(content).toContain("## Confidence Scoring & Anti-Hallucination");
+    expect(content).not.toContain("No super files");
+  });
 });
 
 describe("wrapTaskWithInstructions", () => {
