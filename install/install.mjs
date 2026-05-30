@@ -4,9 +4,15 @@
  * Usage: node install/install.mjs [--uninstall]
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  defaultCursorHome,
+  installSessionRule,
+  installUserHooks,
+  uninstallSessionRule,
+  uninstallUserHooks,
+} from "./lib/user-hooks.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
@@ -14,7 +20,7 @@ const instructionsSrc = join(repoRoot, "kodaelus", "instructions.md");
 const templateAgent = join(__dirname, "templates", "kodaelus.agent.md");
 const templateSkill = join(__dirname, "templates", "kodaelus.skill.md");
 
-const cursorHome = process.env.CURSOR_HOME ?? join(homedir(), ".cursor");
+const cursorHome = defaultCursorHome();
 const globalKodaelus = join(cursorHome, "kodaelus");
 const agentsDir = join(cursorHome, "agents");
 const skillsDir = join(cursorHome, "skills", "kodaelus");
@@ -32,7 +38,9 @@ if (uninstall) {
       console.log(`Removed: ${p}`);
     }
   }
-  console.log("Kodaelus global install removed.");
+  uninstallUserHooks({ cursorHome });
+  uninstallSessionRule({ cursorHome });
+  console.log("Kodaelus global install removed (including user hooks and session rule).");
   process.exit(0);
 }
 
@@ -53,11 +61,18 @@ writeFileSync(join(globalKodaelus, "instructions.md"), instructions, "utf8");
 writeFileSync(join(agentsDir, "kodaelus.md"), agentBody, "utf8");
 cpSync(templateSkill, join(skillsDir, "SKILL.md"));
 
+const { hooksJsonDest, hooksDestDir } = installUserHooks({ repoRoot, cursorHome });
+const ruleDest = installSessionRule({ repoRoot, cursorHome });
+
 console.log("Kodaelus installed for all Cursor projects.");
 console.log("  Use is subject to the Kodaelus Proprietary License (LICENSE in this repo).");
 console.log(`  Instructions: ${join(globalKodaelus, "instructions.md")}`);
 console.log(`  Subagent:     ${join(agentsDir, "kodaelus.md")}`);
 console.log(`  Skill:        ${join(skillsDir, "SKILL.md")}`);
+console.log(`  Session rule: ${ruleDest}`);
+console.log(`  User hooks:   ${hooksJsonDest}`);
+console.log(`  Hook scripts: ${hooksDestDir}`);
 console.log("");
-console.log("In any project: pick the Kodaelus subagent, or ask to use Kodaelus.");
+console.log("In any project: ask the main agent to use Kodaelus.");
+console.log("Say \"stop kodaelus\" to end session lock. Git is hook-blocked while active.");
 console.log("Re-run after editing kodaelus/instructions.md in this repo.");

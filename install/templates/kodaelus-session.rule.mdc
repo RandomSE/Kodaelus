@@ -1,0 +1,22 @@
+---
+description: Keep Kodaelus policy active for the whole chat after activation
+alwaysApply: true
+---
+
+# Kodaelus session lock
+
+When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:
+
+- The user said **use Kodaelus** (or similar: activate/enable/switch to Kodaelus).
+- The **kodaelus** subagent was selected or invoked.
+
+While active:
+
+1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent).
+2. Use the full Kodaelus **response structure** and **done criteria** from that file.
+3. **Never run git commands** — hooks enforce this; do not attempt git or ask the user to approve git via the agent.
+4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".
+
+**Opt out** when the user says: `stop kodaelus`, `disable kodaelus`, `normal mode`, or `without kodaelus`.
+
+After opt-out, revert to normal agent behavior unless Kodaelus is activated again.

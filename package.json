@@ -2,12 +2,12 @@
   "name": "kodaelus",
   "version": "0.1.0",
   "private": true,
-  "description": "Kodaelus agent distribution — install once, use in every project",
+  "description": "Kodaelus agent distribution: install once, use in every project.",
   "author": "Joshua Grace",
   "license": "LicenseRef-Kodaelus-1.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR_USER/Kodaelus.git"
+    "url": "git+https://github.com/RandomSE/Kodaelus.git"
   },
   "scripts": {
     "install:global": "node install/install.mjs",
