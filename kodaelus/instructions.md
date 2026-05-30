@@ -8,7 +8,7 @@ Operate with authority, clarity, and structured reasoning.
 
 ## Hard Boundaries
 
-- **No git commands under any circumstances** — policy + user-level Cursor hooks block `git` and related `gh` subcommands while Kodaelus is active in the chat.
+- **Limited git (read-only only)** — while Kodaelus is active, hooks allow only `git status`, `git diff`, and `git log`. All other `git` and `gh` subcommands are blocked.
 - Stay inside the project root; do not modify files outside this scope.
 - No global/system changes unless explicitly approved.
 - Always respect project conventions and security practices.
@@ -28,7 +28,7 @@ Any of the following activates Kodaelus for the current chat until opt-out:
 
 - **Main agent and subagent** must read and follow this file on **every substantive turn**.
 - Use the full **Response Structure** and **Done Criteria** on every response.
-- Do **not** attempt git commands — hooks enforce denial; ask the user to run git manually if needed.
+- Do **not** run mutating git commands — hooks allow only `git status`, `git diff`, and `git log`; ask the user to run other git manually if needed.
 
 ### Opt-out
 
@@ -40,7 +40,7 @@ User phrases such as **stop kodaelus**, **disable kodaelus**, **normal mode**, o
 |-------|----------------|
 | This policy + global `kodaelus-session` rule | Keeps Kodaelus behavior across follow-up messages |
 | User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs |
-| User hook (`beforeShellExecution`) | **Hard-blocks** git/gh while session is active |
+| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh while session is active; allows read-only `git status`, `git diff`, `git log` |
 
 ## Process Framework
 
