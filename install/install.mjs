@@ -74,5 +74,5 @@ console.log(`  User hooks:   ${hooksJsonDest}`);
 console.log(`  Hook scripts: ${hooksDestDir}`);
 console.log("");
 console.log("In any project: ask the main agent to use Kodaelus.");
-console.log("Say \"stop kodaelus\" to end session lock. Git is hook-blocked while active.");
+console.log("Say \"stop kodaelus\" to end session lock. Mutating git is hook-blocked while active (status/diff/log allowed).");
 console.log("Re-run after editing kodaelus/instructions.md in this repo.");

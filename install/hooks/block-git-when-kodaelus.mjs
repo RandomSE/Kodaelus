@@ -3,7 +3,7 @@
  * User-level Cursor hook: deny git shell commands while Kodaelus session is active.
  * Event: beforeShellExecution
  */
-import { isGitShellCommand } from "./lib/git-guard.mjs";
+import { isBlockedGitShellCommand } from "./lib/git-guard.mjs";
 import { isSessionActive } from "./lib/session-store.mjs";
 
 async function readInput() {
@@ -30,9 +30,9 @@ function deny() {
     JSON.stringify({
       permission: "deny",
       user_message:
-        "Git commands are blocked while Kodaelus is active in this chat. Say \"stop kodaelus\" to opt out, or run git yourself.",
+        "This git/gh command is blocked while Kodaelus is active. Only read-only git (status, diff, log) is allowed. Say \"stop kodaelus\" to opt out, or run other git commands yourself.",
       agent_message:
-        "Kodaelus policy prohibits git commands (including gh repo/pr/issue subcommands). Do not retry git. Complete the task without git or ask the user to run git manually.",
+        "Kodaelus allows only read-only git: status, diff, log. All other git and gh subcommands are prohibited. Do not retry blocked commands; ask the user to run them manually if needed.",
     }) + "\n",
   );
   process.exit(0);
@@ -42,7 +42,7 @@ const input = await readInput();
 const command = `${input.command ?? ""}`;
 
 try {
-  if (isSessionActive(input.conversation_id ?? "") && isGitShellCommand(command)) {
+  if (isSessionActive(input.conversation_id ?? "") && isBlockedGitShellCommand(command)) {
     deny();
   }
 } catch {

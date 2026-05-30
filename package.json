@@ -11,7 +11,8 @@
   },
   "scripts": {
     "install:global": "node install/install.mjs",
-    "uninstall:global": "node install/install.mjs --uninstall"
+    "uninstall:global": "node install/install.mjs --uninstall",
+    "test:hooks": "node --test install/hooks/lib/git-guard.test.mjs"
   },
   "engines": {
     "node": ">=20"

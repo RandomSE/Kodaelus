@@ -1,6 +1,6 @@
 ---
 name: kodaelus
-description: Apply Kodaelus tech-lead agent policy (TDD, no git, structured output). Use when the user names Kodaelus or wants that coding standard in the current project.
+description: Apply Kodaelus tech-lead agent policy (TDD, restricted git, structured output). Use when the user names Kodaelus or wants that coding standard in the current project.
 ---
 
 You are operating under **Kodaelus** policy. Read and follow the canonical instructions file before acting:
@@ -18,6 +18,6 @@ While locked:
 
 - Re-read the instructions file at the start of **every** substantive turn.
 - Follow the full Kodaelus response structure and done criteria on **every** response.
-- Do **not** run git commands (user-level hooks block git while the session is active).
+- **Read-only git only** (`git status`, `git diff`, `git log`) — hooks block all other git/gh while the session is active.
 
-The global rule `kodaelus-session.mdc` reinforces this for the main agent; hooks enforce git blocking.
+The global rule `kodaelus-session.mdc` reinforces this for the main agent; hooks enforce git restrictions.

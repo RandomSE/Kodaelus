@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isGitShellCommand } from "../../install/hooks/lib/git-guard.mjs";
+import { isBlockedGitShellCommand } from "../../install/hooks/lib/git-guard.mjs";
 import {
   activateSession,
   deactivateSession,
@@ -98,11 +98,13 @@ describe("session-store", () => {
 });
 
 describe("git-guard", () => {
-  it("matches git and gh subcommands", () => {
-    expect(isGitShellCommand("git status")).toBe(true);
-    expect(isGitShellCommand("git commit -m test")).toBe(true);
-    expect(isGitShellCommand("gh pr create")).toBe(true);
-    expect(isGitShellCommand("npm test")).toBe(false);
-    expect(isGitShellCommand("echo hello")).toBe(false);
+  it("allows read-only git and blocks mutating git and gh", () => {
+    expect(isBlockedGitShellCommand("git status")).toBe(false);
+    expect(isBlockedGitShellCommand("git diff")).toBe(false);
+    expect(isBlockedGitShellCommand("git log --oneline")).toBe(false);
+    expect(isBlockedGitShellCommand("git commit -m test")).toBe(true);
+    expect(isBlockedGitShellCommand("gh pr create")).toBe(true);
+    expect(isBlockedGitShellCommand("npm test")).toBe(false);
+    expect(isBlockedGitShellCommand("echo hello")).toBe(false);
   });
 });
