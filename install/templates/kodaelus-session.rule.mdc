@@ -8,14 +8,16 @@ alwaysApply: true
 When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:
 
 - The user said **use Kodaelus** (or similar: activate/enable/switch to Kodaelus).
+- The user said **use kodaelus 1**, **kodaelus 1**, **kodaelus prompt mode**, or **kodaelus planner** (planner mode — prompt recommendation only).
 - The **kodaelus** subagent was selected or invoked.
 
 While active:
 
 1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent).
-2. Use the full Kodaelus **response structure** and **done criteria** from that file.
+2. Apply the Kodaelus **response structure** and **done criteria** for the active mode (**full** vs **Kodaelus 1**) from that file.
 3. **Git is restricted** — only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
 4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".
+5. In **Kodaelus 1**, do not implement code or run mutating tools until the user upgrades with `use kodaelus` (without `1`) or **run it** / **execute**.
 
 **Opt out** when the user says: `stop kodaelus`, `disable kodaelus`, `normal mode`, or `without kodaelus`.
 

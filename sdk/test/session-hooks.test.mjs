@@ -41,6 +41,9 @@ describe("session-store", () => {
 
   it("detects activation and deactivation prompts", () => {
     expect(isActivatePrompt("Use kodaelus for this task")).toBe(true);
+    expect(isActivatePrompt("use kodaelus 1")).toBe(true);
+    expect(isActivatePrompt("kodaelus planner")).toBe(true);
+    expect(isActivatePrompt("kodaelus prompt mode")).toBe(true);
     expect(isActivatePrompt("please fix the bug")).toBe(false);
     expect(isDeactivatePrompt("stop kodaelus")).toBe(true);
     expect(isDeactivatePrompt("normal mode")).toBe(true);

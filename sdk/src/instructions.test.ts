@@ -111,6 +111,20 @@ describe("loadInstructions", () => {
     expect(content).toContain("## Confidence Scoring & Anti-Hallucination");
     expect(content).not.toContain("No super files");
   });
+
+  it("includes architecture review, follow-up queue, and kodaelus modes", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    const content = await loadInstructions({
+      cwd: repoRoot,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+    });
+    expect(content).toContain("## Architecture Improvement Review");
+    expect(content).toContain("## Follow-Up Queue");
+    expect(content).toContain("## Kodaelus Modes");
+    expect(content).toContain("use kodaelus 1");
+    expect(content).toContain("implement suggestions");
+    expect(content).toContain("FU-1");
+  });
 });
 
 describe("wrapTaskWithInstructions", () => {
