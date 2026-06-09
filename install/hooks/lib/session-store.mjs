@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const ACTIVATE =
-  /\b(use|with|activate|enable|switch to)\s+kodaelus\b|\bkodaelus\s+mode\b/i;
+  /\b(use|with|activate|enable|switch to)\s+kodaelus\b|\bkodaelus\s+mode\b|\bkodaelus\s+1\b|\bkodaelus\s+planner\b|\bkodaelus\s+prompt\s+mode\b/i;
 const DEACTIVATE =
   /\b(stop|disable|exit|end|leave)\s+kodaelus\b|\bnormal\s+mode\b|\bwithout\s+kodaelus\b/i;
 

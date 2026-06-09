@@ -33,6 +33,23 @@ This writes:
 
 Say **stop kodaelus** to end session lock. Git commands are hook-blocked while Kodaelus is active in a chat.
 
+### Modes
+
+| Mode | Say | What you get |
+|------|-----|--------------|
+| **Full** | `use kodaelus` | TDD, implementation, verification, structured delivery |
+| **Kodaelus 1** | `use kodaelus 1`, `kodaelus planner`, `kodaelus prompt mode` | Read-only planning; outputs an expanded **Recommended Kodaelus Prompt** to paste and run in full mode |
+| **Upgrade** | `use kodaelus`, `run it`, or `execute` after Kodaelus 1 | Switches to full mode using the recommended prompt as the task |
+
+### Architecture Improvement Review
+
+Ask for improvements, alternatives, or tradeoffs **without** asking for code yet (e.g. “architecture review,” “what would you do differently”). Kodaelus returns a dedicated **Architecture Improvement Review** with rated decision points (1–5), options, recommendations, and confidence scores tied to repo evidence.
+
+### Follow-Up Queue
+
+After substantive deliveries (features, fixes, refactors), Kodaelus appends a structured **Follow-Up Queue** (`FU-1`, `FU-2`, …) with scope, effort, risk, and confidence — not open-ended “say the word” suggestions.
+
+To execute queued work, say **implement suggestions**, **implement follow-ups**, **implement FU-2**, or **implement all follow-ups**. Kodaelus expands its plan and runs the full TDD loop for the selected items.
 
 ## Layout
 
@@ -47,7 +64,10 @@ Say **stop kodaelus** to end session lock. Git commands are hook-blocked while K
 
 ```bash
 cd sdk && npm test
+npm run test:hooks
 ```
+
+`test:hooks` runs hook unit tests (git guard, session-store activation phrases).
 
 ## Legal & distribution
 
