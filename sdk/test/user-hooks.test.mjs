@@ -20,16 +20,22 @@ describe("user-hooks merge", () => {
     const template = {
       version: 1,
       hooks: {
-        beforeShellExecution: [{ command: "node ./hooks/block-git-when-kodaelus.mjs" }],
+        beforeShellExecution: [
+          { command: "node ./hooks/block-git-when-kodaelus.mjs" },
+          { command: "node ./hooks/block-delete-shell.mjs" },
+        ],
+        preToolUse: [{ command: "node ./hooks/block-entry-point-delete.mjs" }],
         sessionEnd: [{ command: "node ./hooks/kodaelus-session.mjs" }],
       },
     };
 
     const first = mergeHooks(existing, template);
-    expect(first.hooks.beforeShellExecution).toHaveLength(2);
+    expect(first.hooks.beforeShellExecution).toHaveLength(3);
+    expect(first.hooks.preToolUse).toHaveLength(1);
 
     const second = mergeHooks(first, template);
-    expect(second.hooks.beforeShellExecution).toHaveLength(2);
+    expect(second.hooks.beforeShellExecution).toHaveLength(3);
+    expect(second.hooks.preToolUse).toHaveLength(1);
     expect(second.hooks.sessionEnd).toHaveLength(1);
   });
 

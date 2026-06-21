@@ -17,10 +17,20 @@
         "command": "node ./hooks/kodaelus-session.mjs"
       }
     ],
+    "preToolUse": [
+      {
+        "command": "node ./hooks/block-entry-point-delete.mjs",
+        "matcher": "Delete"
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": "node ./hooks/block-git-when-kodaelus.mjs",
         "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow)\\b"
+      },
+      {
+        "command": "node ./hooks/block-delete-shell.mjs",
+        "matcher": "\\brm\\b|\\bdel\\b|Remove-Item|\\bunlink\\b"
       }
     ]
   }

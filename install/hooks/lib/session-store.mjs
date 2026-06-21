@@ -11,8 +11,8 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-const ACTIVATE =
-  /\b(use|with|activate|enable|switch to)\s+kodaelus\b|\bkodaelus\s+mode\b|\bkodaelus\s+1\b|\bkodaelus\s+planner\b|\bkodaelus\s+prompt\s+mode\b/i;
+/** @typedef {'main' | 'prompt' | 'bug'} KodaelusMode */
+
 const DEACTIVATE =
   /\b(stop|disable|exit|end|leave)\s+kodaelus\b|\bnormal\s+mode\b|\bwithout\s+kodaelus\b/i;
 
@@ -75,23 +75,46 @@ export function withStoreLock(fn) {
   throw new Error("session-store: timed out waiting for store lock");
 }
 
+/**
+ * @returns {{ conversationIds: string[], modes: Record<string, KodaelusMode> }}
+ */
 function readStoreUnlocked() {
   const storePath = getStorePath();
   if (!existsSync(storePath)) {
-    return { conversationIds: [] };
+    return { conversationIds: [], modes: {} };
   }
   try {
     const parsed = JSON.parse(readFileSync(storePath, "utf8"));
     const ids = Array.isArray(parsed?.conversationIds)
       ? parsed.conversationIds.filter((id) => typeof id === "string" && id.length > 0)
       : [];
-    return { conversationIds: [...new Set(ids)] };
+    const conversationIds = [...new Set(ids)];
+    /** @type {Record<string, KodaelusMode>} */
+    const modes = {};
+    if (parsed?.modes && typeof parsed.modes === "object") {
+      for (const id of conversationIds) {
+        const mode = parsed.modes[id];
+        if (mode === "main" || mode === "prompt" || mode === "bug") {
+          modes[id] = mode;
+        } else {
+          modes[id] = "main";
+        }
+      }
+    } else {
+      for (const id of conversationIds) {
+        modes[id] = "main";
+      }
+    }
+    return { conversationIds, modes };
   } catch {
-    return { conversationIds: [] };
+    return { conversationIds: [], modes: {} };
   }
 }
 
-function writeStoreUnlocked(conversationIds) {
+/**
+ * @param {{ conversationIds: string[], modes: Record<string, KodaelusMode> }} store
+ */
+function writeStoreUnlocked(store) {
   const storePath = getStorePath();
   const dir = dirname(storePath);
   mkdirSync(dir, { recursive: true });
@@ -102,8 +125,16 @@ function writeStoreUnlocked(conversationIds) {
     }
   }
 
+  const conversationIds = [...new Set(store.conversationIds)];
+  /** @type {Record<string, KodaelusMode>} */
+  const modes = {};
+  for (const id of conversationIds) {
+    modes[id] = store.modes[id] ?? "main";
+  }
+
   const payload = {
-    conversationIds: [...new Set(conversationIds)],
+    conversationIds,
+    modes,
     updatedAt: new Date().toISOString(),
   };
   const tmpPath = join(dir, `active-sessions.${process.pid}.tmp`);
@@ -116,8 +147,52 @@ function writeStoreUnlocked(conversationIds) {
   }
 }
 
+/**
+ * Detect Kodaelus mode from a user prompt. Priority: deactivate → bugfix → bug → prompt → main.
+ * @param {string} prompt
+ * @returns {KodaelusMode | null}
+ */
+export function detectKodaelusMode(prompt) {
+  if (typeof prompt !== "string" || !prompt.trim()) return null;
+  const text = prompt.trim();
+
+  if (isDeactivatePrompt(text)) return null;
+
+  if (/\bbugfix\b/i.test(text) || /\bbug[-\s]fix\b/i.test(text)) {
+    return "main";
+  }
+
+  if (
+    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(2|b|bug)\b/i.test(text) ||
+    /\bkodaelus\s+(2|bug\s+mode)\b/i.test(text) ||
+    /\bkodaelus\s+b\b/i.test(text)
+  ) {
+    return "bug";
+  }
+
+  if (
+    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(1|p|prompt)\b/i.test(text) ||
+    /\bkodaelus\s+(1|planner|prompt\s+mode)\b/i.test(text)
+  ) {
+    return "prompt";
+  }
+
+  if (/\b(run it|execute)\b/i.test(text)) {
+    return "main";
+  }
+
+  if (
+    /\b(use|with|activate|enable|switch to)\s+kodaelus(?:\s+(0|main))?\b/i.test(text) ||
+    /\bkodaelus\s+mode\b/i.test(text)
+  ) {
+    return "main";
+  }
+
+  return null;
+}
+
 export function isActivatePrompt(prompt) {
-  return typeof prompt === "string" && ACTIVATE.test(prompt);
+  return detectKodaelusMode(prompt) !== null;
 }
 
 export function isDeactivatePrompt(prompt) {
@@ -131,17 +206,60 @@ export function isSessionActive(conversationId) {
       () => readStoreUnlocked().conversationIds.includes(conversationId),
     );
   } catch {
-    // Fail open: if session state cannot be read, do not block git or other behavior.
     return false;
   }
 }
 
-export function activateSession(conversationId) {
+/**
+ * @param {string} conversationId
+ * @returns {KodaelusMode | null}
+ */
+export function getSessionMode(conversationId) {
+  if (!conversationId) return null;
+  try {
+    return withStoreLock(() => {
+      const store = readStoreUnlocked();
+      if (!store.conversationIds.includes(conversationId)) return null;
+      return store.modes[conversationId] ?? "main";
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} conversationId
+ * @param {KodaelusMode} mode
+ */
+export function setSessionMode(conversationId, mode) {
   if (!conversationId) return false;
   return withStoreLock(() => {
     const store = readStoreUnlocked();
-    if (store.conversationIds.includes(conversationId)) return false;
-    writeStoreUnlocked([...store.conversationIds, conversationId]);
+    if (!store.conversationIds.includes(conversationId)) return false;
+    store.modes[conversationId] = mode;
+    writeStoreUnlocked(store);
+    return true;
+  });
+}
+
+/**
+ * @param {string} conversationId
+ * @param {KodaelusMode} [mode='main']
+ */
+export function activateSession(conversationId, mode = "main") {
+  if (!conversationId) return false;
+  const resolvedMode = mode === "prompt" || mode === "bug" ? mode : "main";
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    const alreadyActive = store.conversationIds.includes(conversationId);
+    if (alreadyActive) {
+      store.modes[conversationId] = resolvedMode;
+      writeStoreUnlocked(store);
+      return true;
+    }
+    store.conversationIds.push(conversationId);
+    store.modes[conversationId] = resolvedMode;
+    writeStoreUnlocked(store);
     return true;
   });
 }
@@ -150,9 +268,11 @@ export function deactivateSession(conversationId) {
   if (!conversationId) return false;
   return withStoreLock(() => {
     const store = readStoreUnlocked();
-    const next = store.conversationIds.filter((id) => id !== conversationId);
-    if (next.length === store.conversationIds.length) return false;
-    writeStoreUnlocked(next);
+    const nextIds = store.conversationIds.filter((id) => id !== conversationId);
+    if (nextIds.length === store.conversationIds.length) return false;
+    const nextModes = { ...store.modes };
+    delete nextModes[conversationId];
+    writeStoreUnlocked({ conversationIds: nextIds, modes: nextModes });
     return true;
   });
 }

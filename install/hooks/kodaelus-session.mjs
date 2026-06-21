@@ -7,6 +7,7 @@ import {
   activateSession,
   clearSession,
   deactivateSession,
+  detectKodaelusMode,
   isActivatePrompt,
   isDeactivatePrompt,
 } from "./lib/session-store.mjs";
@@ -43,7 +44,7 @@ try {
   if (event === "subagentStart") {
     const subagentType = `${input.subagent_type ?? ""}`.toLowerCase();
     if (subagentType.includes("kodaelus")) {
-      activateSession(conversationId);
+      activateSession(conversationId, "main");
     }
     allow();
   }
@@ -53,7 +54,7 @@ try {
     if (isDeactivatePrompt(prompt)) {
       deactivateSession(conversationId);
     } else if (isActivatePrompt(prompt)) {
-      activateSession(conversationId);
+      activateSession(conversationId, detectKodaelusMode(prompt) ?? "main");
     }
   }
 } catch {

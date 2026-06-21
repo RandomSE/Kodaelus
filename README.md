@@ -37,9 +37,12 @@ Say **stop kodaelus** to end session lock. Git commands are hook-blocked while K
 
 | Mode | Say | What you get |
 |------|-----|--------------|
-| **Full** | `use kodaelus` | TDD, implementation, verification, structured delivery |
-| **Kodaelus 1** | `use kodaelus 1`, `kodaelus planner`, `kodaelus prompt mode` | Read-only planning; outputs an expanded **Recommended Kodaelus Prompt** to paste and run in full mode |
-| **Upgrade** | `use kodaelus`, `run it`, or `execute` after Kodaelus 1 | Switches to full mode using the recommended prompt as the task |
+| **Main (0)** | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `use kodaelus bugfix` | Full TDD implementation |
+| **Prompt (1)** | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner` | Read-only handoff prompt |
+| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug` | Visibility, repro, dossier — not the fix |
+| **Upgrade** | `run it`, `execute`, `use kodaelus` after Prompt or Bug Investigation | Switch mode; consume dossier/prompt |
+
+`bugfix` / `bug fix` → **Main**, not Bug Investigation. After investigation, say **`use kodaelus bugfix`** to fix using the dossier at `.kodaelus/bugs/`.
 
 ### Architecture Improvement Review
 
@@ -63,11 +66,52 @@ To execute queued work, say **implement suggestions**, **implement follow-ups**,
 ## Tests
 
 ```bash
-cd sdk && npm test
-npm run test:hooks
+npm test                 # policy smoke + hook unit/integration tests (repo root)
+cd sdk && npm test       # SDK runner + restore helper tests
+cd sdk && npm run build  # compile dist/ including public exports
 ```
 
-`test:hooks` runs hook unit tests (git guard, session-store activation phrases).
+## SDK (CLI and programmatic API)
+
+The `sdk/` package wraps the [Cursor SDK](https://cursor.com/docs/sdk/typescript) with Kodaelus policy preloaded.
+
+### Run Kodaelus on a task
+
+```bash
+cd sdk
+export CURSOR_API_KEY=your_key
+npm run kodaelus -- "Fix the failing auth test"
+```
+
+Optional env: `KODAELUS_CWD` (target project), `KODAELUS_MODEL`, `KODAELUS_INSTRUCTIONS`.
+
+### Restore deleted files
+
+When Kodaelus deletes files under policy, backups live in `.kodaelus/trash/` and entries in `.kodaelus/deletion-manifest.json`. Restore without git:
+
+```bash
+cd sdk
+npm run restore -- src/removed.ts    # restore a specific path
+npm run restore -- --last            # undo the most recent deletion
+```
+
+Set `KODAELUS_CWD` to the target project root when not running from that directory.
+
+### Programmatic imports
+
+After `npm run build`:
+
+```typescript
+import {
+  runKodaelus,
+  appendDeletionEntry,
+  readDeletionManifest,
+  restoreDeletedFile,
+  undoLastDeletion,
+} from "@kodaelus/sdk-runner";
+```
+
+`appendDeletionEntry` writes to `.kodaelus/deletion-manifest.json`; pair with a trash backup per Kodaelus **File Deletion Protocol**.
 
 ## Legal & distribution
 
