@@ -8,6 +8,8 @@ import { isBlockedGitShellCommand } from "../../install/hooks/lib/git-guard.mjs"
 import {
   activateSession,
   deactivateSession,
+  detectKodaelusMode,
+  getSessionMode,
   isActivatePrompt,
   isDeactivatePrompt,
   isSessionActive,
@@ -42,11 +44,24 @@ describe("session-store", () => {
   it("detects activation and deactivation prompts", () => {
     expect(isActivatePrompt("Use kodaelus for this task")).toBe(true);
     expect(isActivatePrompt("use kodaelus 1")).toBe(true);
+    expect(isActivatePrompt("use kodaelus 2")).toBe(true);
+    expect(isActivatePrompt("use kodaelus bug")).toBe(true);
+    expect(isActivatePrompt("use kodaelus bugfix")).toBe(true);
     expect(isActivatePrompt("kodaelus planner")).toBe(true);
     expect(isActivatePrompt("kodaelus prompt mode")).toBe(true);
+    expect(detectKodaelusMode("use kodaelus bug fix")).toBe("main");
+    expect(detectKodaelusMode("use kodaelus main")).toBe("main");
+    expect(detectKodaelusMode("use kodaelus p")).toBe("prompt");
     expect(isActivatePrompt("please fix the bug")).toBe(false);
     expect(isDeactivatePrompt("stop kodaelus")).toBe(true);
     expect(isDeactivatePrompt("normal mode")).toBe(true);
+  });
+
+  it("persists session mode across activation", () => {
+    activateSession("conv-mode", "prompt");
+    expect(getSessionMode("conv-mode")).toBe("prompt");
+    activateSession("conv-mode", "main");
+    expect(getSessionMode("conv-mode")).toBe("main");
   });
 
   it("releases the store lock after mutations", () => {

@@ -6,13 +6,24 @@ on:
   pull_request:
     branches: [main, master]
 
-defaults:
-  run:
-    working-directory: sdk
-
 jobs:
-  test:
+  root:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Policy and hook tests
+        run: npm test
+
+  sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -30,3 +41,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify public exports
+        run: npm run verify:exports

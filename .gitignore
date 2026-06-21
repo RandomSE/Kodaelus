@@ -27,5 +27,8 @@ Thumbs.db
 *.suo
 *.user
 
+# Kodaelus deletion backups (consumer projects)
+.kodaelus/
+
 # OneDrive / Windows junk
 desktop.ini

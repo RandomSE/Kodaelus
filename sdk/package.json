@@ -4,9 +4,19 @@
   "private": true,
   "license": "LicenseRef-Kodaelus-1.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
+    "verify:exports": "node scripts/verify-exports.mjs",
     "kodaelus": "tsx src/cli.ts",
+    "restore": "tsx src/restore-cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

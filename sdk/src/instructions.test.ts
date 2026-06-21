@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { validateInstructionsPolicy } from "../../install/lib/instructions-policy-keywords.mjs";
 import {
   globalInstructionsPath,
   loadInstructions,
@@ -124,6 +125,15 @@ describe("loadInstructions", () => {
     expect(content).toContain("use kodaelus 1");
     expect(content).toContain("implement suggestions");
     expect(content).toContain("FU-1");
+  });
+
+  it("includes hardened policy keywords shared with install smoke tests", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    const content = await loadInstructions({
+      cwd: repoRoot,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+    });
+    expect(validateInstructionsPolicy(content)).toEqual([]);
   });
 });
 
