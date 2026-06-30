@@ -7,7 +7,7 @@ alwaysApply: true
 
 When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:
 
-- The user activated Kodaelus (Main, Prompt, or Bug Investigation — see mode table below).
+- The user activated Kodaelus (any mode — see mode table below).
 - The **kodaelus** subagent was selected or invoked (Main mode).
 
 ## Modes
@@ -17,17 +17,22 @@ When **any** of these happened in this conversation, Kodaelus is **active until 
 | **Main** | 0 | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, **`use kodaelus bugfix`**, **`use kodaelus bug fix`**, `run it`, `execute` |
 | **Prompt** | 1 | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner`, `kodaelus prompt mode` |
 | **Bug Investigation** | 2 | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` — **not** `bugfix` / `bug fix` |
+| **Suggest** | 3 | `use kodaelus suggest`, `use kodaelus 3`; sub-modes: **`suggest issues`**, **`suggest features`** |
+| **Lite** | 4 | `use kodaelus lite`, `use kodaelus 4`, `kodaelus lite mode`, `use kodaelus fast` |
+| **Question** | 5 | `use kodaelus q`, `use kodaelus question`, `use kodaelus 5` |
 
 **Upgrade:** `run it`, `execute`, or `use kodaelus` / `use kodaelus main` after Prompt → Main; `use kodaelus bugfix` after Bug Investigation → Main (consume dossier).
 
 While active:
 
 1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent).
-2. Apply the Kodaelus **response structure** and **done criteria** for the active mode (**Main** vs **Prompt** vs **Bug Investigation**) from that file.
+2. Apply the Kodaelus **response structure** and **done criteria** for the active mode from that file.
 3. **Git is restricted** — only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
 4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".
-5. In **Prompt mode**, do not implement code or run mutating tools until upgrade to Main.
+5. **Prompt / Suggest / Question:** read-only — no mutating tools until upgrade to Main or Lite.
 6. In **Bug Investigation mode**, diagnostic writes (logging, repro tests, `.kodaelus/bugs/` artifacts) are allowed; **do not ship the fix** until upgrade to Main.
+7. **Main** and **Bug Investigation** substantive responses **end with Follow-Up Queue** as the final section (related improvements).
+8. **Hooks enforce:** backup-before-delete, entry-point blocks, scope creep (`scope approved` to unlock), confidence format checks.
 
 **Opt out** when the user says: `stop kodaelus`, `disable kodaelus`, `normal mode`, or `without kodaelus`.
 

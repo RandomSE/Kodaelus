@@ -8,9 +8,10 @@ Agent distribution — not required inside consumer projects. Use is governed by
 npm run install:global
 ```
 
-## In any other repo
+## Use in any repo
 
 - Pick subagent **kodaelus**, or ask to use Kodaelus.
+- Modes: Main (0), Prompt (1), Bug Investigation (2), Suggest (3), Lite (4), Question (5).
 - No `AGENTS.md` or `.cursor/rules` from this project needed.
 
 ## Policy source

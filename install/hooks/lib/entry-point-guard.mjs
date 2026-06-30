@@ -235,6 +235,8 @@ export function extractShellDeleteTargets(command) {
     /\bdel(?:ete)?(?:\s+\/[^\s]+)*\s+([^\s;&|><"']+)/gi,
     /\bRemove-Item(?:\s+-[^\s]+)*\s+([^\s;&|><"']+)/gi,
     /\bunlink(?:Sync)?\s*\(?['"]?([^'";\s)]+)/gi,
+    /\brmdir(?:\s+\/[^\s]+)*\s+([^\s;&|><"']+)/gi,
+    /\brd(?:\s+\/[^\s]+)*\s+([^\s;&|><"']+)/gi,
   ];
 
   for (const pattern of patterns) {

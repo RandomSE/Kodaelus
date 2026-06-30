@@ -125,6 +125,14 @@ describe("loadInstructions", () => {
     expect(content).toContain("use kodaelus 1");
     expect(content).toContain("implement suggestions");
     expect(content).toContain("FU-1");
+    expect(content).toContain("Placement rule");
+    expect(content).toContain("Final section");
+    expect(content).toMatch(/Follow-Up Queue.*Final section.*use kodaelus bugfix/s);
+    expect(content).toContain("use kodaelus suggest issues");
+    expect(content).toContain("use kodaelus lite");
+    expect(content).toContain("use kodaelus question");
+    expect(content).toContain("guard-delete.mjs");
+    expect(content).toContain("scope approved");
   });
 
   it("includes hardened policy keywords shared with install smoke tests", async () => {

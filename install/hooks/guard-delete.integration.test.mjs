@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { activateSession, deactivateSession } from "./lib/session-store.mjs";
 
-const hookScript = fileURLToPath(new URL("./block-entry-point-delete.mjs", import.meta.url));
+const hookScript = fileURLToPath(new URL("./guard-delete.mjs", import.meta.url));
 
 let tempHome;
 let tempProject;
@@ -87,14 +87,38 @@ test("denies Delete on entry-point file when Kodaelus session is active", async 
   const result = JSON.parse(stdout);
   assert.equal(result.permission, "deny");
   assert.match(result.user_message, /entry-point/i);
-  assert.match(result.agent_message, /hard-blocked/i);
+
+  const manifest = JSON.parse(
+    readFileSync(join(tempProject, ".kodaelus/deletion-manifest.json"), "utf8"),
+  );
+  assert.equal(manifest[0].entryPointCheck, "BLOCKED");
 
   deactivateSession("conv-active");
 });
 
-test("allows Delete on non-entry-point file when Kodaelus session is active", async () => {
+test("denies Delete on missing entry-point path when Kodaelus session is active", async () => {
+  writeFileSync(
+    join(tempProject, "package.json"),
+    JSON.stringify({ main: "index.js", scripts: { start: "node index.js" } }),
+    "utf8",
+  );
+  activateSession("conv-missing-entry", "main");
+
+  const { stdout } = await runHook({
+    conversation_id: "conv-missing-entry",
+    tool_input: { path: join(tempProject, "index.js") },
+    workspace_roots: [tempProject],
+  });
+
+  assert.equal(JSON.parse(stdout).permission, "deny");
+  assert.match(JSON.parse(stdout).user_message, /entry-point/i);
+
+  deactivateSession("conv-missing-entry");
+});
+
+test("backs up and allows Delete on non-entry-point file when Kodaelus session is active", async () => {
   seedEntryPointProject(tempProject);
-  activateSession("conv-active-util");
+  activateSession("conv-active-util", "main");
 
   const { code, stdout } = await runHook({
     conversation_id: "conv-active-util",
@@ -105,5 +129,39 @@ test("allows Delete on non-entry-point file when Kodaelus session is active", as
   assert.equal(code, 0);
   assert.deepEqual(JSON.parse(stdout), { permission: "allow" });
 
+  const manifest = JSON.parse(
+    readFileSync(join(tempProject, ".kodaelus/deletion-manifest.json"), "utf8"),
+  );
+  assert.equal(manifest.length, 1);
+  assert.equal(manifest[0].path, "util.js");
+  assert.ok(existsSync(join(tempProject, manifest[0].backup)));
+
   deactivateSession("conv-active-util");
+});
+
+test("skips backup in prompt mode but still blocks entry-point", async () => {
+  seedEntryPointProject(tempProject);
+  activateSession("conv-prompt", "prompt");
+
+  const entry = await runHook({
+    conversation_id: "conv-prompt",
+    tool_input: { path: join(tempProject, "index.js") },
+    workspace_roots: [tempProject],
+  });
+  assert.equal(JSON.parse(entry.stdout).permission, "deny");
+
+  const util = await runHook({
+    conversation_id: "conv-prompt",
+    tool_input: { path: join(tempProject, "util.js") },
+    workspace_roots: [tempProject],
+  });
+  assert.deepEqual(JSON.parse(util.stdout), { permission: "allow" });
+
+  const manifest = JSON.parse(
+    readFileSync(join(tempProject, ".kodaelus/deletion-manifest.json"), "utf8"),
+  );
+  assert.ok(manifest.every((row) => row.path !== "util.js"));
+  assert.ok(manifest.every((row) => !row.backup));
+
+  deactivateSession("conv-prompt");
 });

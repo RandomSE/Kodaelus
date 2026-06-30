@@ -41,6 +41,7 @@ export const HARDENED_POLICY_KEYWORDS = [
   "## Escalation Protocol",
   "Escalation Block",
   "### Scope creep guardrail",
+  "scope approved",
   "Concurrent modification",
   "### Performance Evidence",
   "Confidence: NN% | Evidence:",
@@ -49,6 +50,19 @@ export const HARDENED_POLICY_KEYWORDS = [
   ".kodaelus/bugs/",
   "use kodaelus main",
   "detectKodaelusMode",
+  "Placement rule",
+  "**Final section.**",
+  "### Suggest mode (3)",
+  "use kodaelus suggest issues",
+  ".kodaelus/suggestions/",
+  "### Lite mode (4)",
+  "use kodaelus lite",
+  "Mode Lite (4) vs Delivery Tier Lite",
+  "### Question mode (5)",
+  "use kodaelus question",
+  "guard-delete.mjs",
+  "Hook enforcement",
+  "confidence-evidence-guard.mjs",
 ];
 
 /**

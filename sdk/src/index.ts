@@ -22,3 +22,9 @@ export type {
   DeletionManifestEntry,
   RestoreResult,
 } from "./deletion-manifest.js";
+
+export {
+  diffPriorSuggestions,
+  extractSuggestionKeys,
+  SUGGESTIONS_DIR_REL,
+} from "./suggestions.js";
