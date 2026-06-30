@@ -7,10 +7,14 @@ import {
   activateSession,
   deactivateSession,
   detectKodaelusMode,
+  detectSuggestSubMode,
+  getScopeStatus,
   getSessionMode,
   isActivatePrompt,
   isDeactivatePrompt,
+  isMutatingMode,
   isSessionActive,
+  recordTouchedFile,
   setSessionMode,
 } from "./session-store.mjs";
 
@@ -70,6 +74,35 @@ test("detectKodaelusMode: deactivate phrases → null", () => {
   assert.equal(detectKodaelusMode("normal mode"), null);
 });
 
+test("detectKodaelusMode: suggest, lite, and question modes", () => {
+  assert.equal(detectKodaelusMode("use kodaelus suggest"), "suggest");
+  assert.equal(detectKodaelusMode("use kodaelus 3"), "suggest");
+  assert.equal(detectKodaelusMode("use kodaelus lite"), "lite");
+  assert.equal(detectKodaelusMode("use kodaelus 4"), "lite");
+  assert.equal(detectKodaelusMode("use kodaelus fast"), "lite");
+  assert.equal(detectKodaelusMode("use kodaelus q"), "question");
+  assert.equal(detectKodaelusMode("use kodaelus 5"), "question");
+});
+
+test("getScopeStatus uses count > limit (allow exactly limit files)", () => {
+  activateSession("conv-scope-status", "main");
+  for (let i = 0; i < 10; i += 1) {
+    recordTouchedFile("conv-scope-status", `src/file-${i}.ts`);
+  }
+
+  const atLimit = getScopeStatus("conv-scope-status");
+  assert.equal(atLimit.count, 10);
+  assert.equal(atLimit.limit, 10);
+  assert.equal(atLimit.exceeded, false);
+
+  recordTouchedFile("conv-scope-status", "src/file-10.ts");
+  const overLimit = getScopeStatus("conv-scope-status");
+  assert.equal(overLimit.count, 11);
+  assert.equal(overLimit.exceeded, true);
+
+  deactivateSession("conv-scope-status");
+});
+
 test("isActivatePrompt uses detectKodaelusMode and legacy phrases", () => {
   assert.equal(isActivatePrompt("Use kodaelus for this task"), true);
   assert.equal(isActivatePrompt("use kodaelus 1"), true);
@@ -116,4 +149,13 @@ test("deactivateSession removes mode", () => {
 test("legacy store without modes defaults to main", () => {
   activateSession("conv-legacy");
   assert.equal(getSessionMode("conv-legacy"), "main");
+});
+
+test("detectSuggestSubMode and isMutatingMode", () => {
+  assert.equal(detectSuggestSubMode("use kodaelus suggest issues"), "issues");
+  assert.equal(detectSuggestSubMode("use kodaelus suggest features"), "features");
+  assert.equal(detectSuggestSubMode("use kodaelus suggest"), null);
+  assert.equal(isMutatingMode("main"), true);
+  assert.equal(isMutatingMode("lite"), true);
+  assert.equal(isMutatingMode("prompt"), false);
 });

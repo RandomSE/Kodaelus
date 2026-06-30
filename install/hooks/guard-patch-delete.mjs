@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * User-level Cursor hook: block shell delete commands targeting entry-point files while Kodaelus is active.
- * Requires trash backup + manifest for non-entry-point deletes in mutating modes.
- * Event: beforeShellExecution
+ * User-level Cursor hook: backup-before-delete for ApplyPatch removals while Kodaelus is active.
+ * Event: preToolUse (matcher: ApplyPatch)
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -12,11 +11,8 @@ import {
   isKodaelusArtifactPath,
   normalizeProjectPath,
 } from "./lib/deletion-guard.mjs";
-import {
-  checkEntryPoint,
-  extractShellDeleteTargets,
-  resolveProjectRoot,
-} from "./lib/entry-point-guard.mjs";
+import { checkEntryPoint, resolveProjectRoot } from "./lib/entry-point-guard.mjs";
+import { extractPatchDeletePaths, extractPatchText } from "./lib/patch-guard.mjs";
 import {
   addPendingDelete,
   getSessionMode,
@@ -60,22 +56,30 @@ function deny(userMessage, agentMessage) {
 
 const input = await readInput();
 const conversationId = `${input.conversation_id ?? input.conversationId ?? ""}`;
-const command = `${input.command ?? ""}`;
 
 try {
   if (!isSessionActive(conversationId)) {
     allow();
   }
 
-  const targets = extractShellDeleteTargets(command);
-  if (targets.length === 0) {
+  const mode = getSessionMode(conversationId) ?? "main";
+  if (!isMutatingMode(mode)) {
     allow();
   }
 
-  const mode = getSessionMode(conversationId) ?? "main";
-  const projectRoot = resolveProjectRoot(input, targets[0]);
+  const patch = extractPatchText(input);
+  if (!patch) {
+    allow();
+  }
 
-  for (const target of targets) {
+  const deletePaths = extractPatchDeletePaths(patch);
+  if (deletePaths.length === 0) {
+    allow();
+  }
+
+  const projectRoot = resolveProjectRoot(input, deletePaths[0]);
+
+  for (const target of deletePaths) {
     let rel;
     try {
       rel = normalizeProjectPath(projectRoot, target);
@@ -93,24 +97,20 @@ try {
       try {
         appendManifestEntry(projectRoot, {
           path: rel,
-          reason: "entry-point hard-block (shell)",
+          reason: "entry-point hard-block (ApplyPatch)",
           confidence: 100,
           backup: "",
           timestamp: new Date().toISOString(),
           entryPointCheck: "BLOCKED",
         });
       } catch {
-        // Continue to deny even if manifest write fails.
+        // Continue to deny.
       }
       const detail = reasons.join("; ");
       deny(
-        `Kodaelus blocked shell deletion of entry-point "${rel}". ${detail}.`,
-        `Shell delete of entry-point "${rel}" is blocked (${detail}). Do not retry; propose alternatives per File Deletion Protocol.`,
+        `Kodaelus blocked ApplyPatch deletion of entry-point "${rel}". ${detail}.`,
+        `ApplyPatch delete of entry-point "${rel}" is blocked (${detail}). Do not retry.`,
       );
-    }
-
-    if (!isMutatingMode(mode)) {
-      continue;
     }
 
     if (!existsSync(absolutePath)) {
@@ -120,7 +120,7 @@ try {
     const { backupPath, timestamp } = copyToTrash(projectRoot, rel);
     appendManifestEntry(projectRoot, {
       path: rel,
-      reason: "pre-delete hook backup (shell)",
+      reason: "pre-delete hook backup (ApplyPatch)",
       confidence: 100,
       backup: backupPath,
       timestamp,
@@ -136,8 +136,8 @@ try {
 } catch (err) {
   const message = err instanceof Error ? err.message : "backup failed";
   deny(
-    `Kodaelus blocked shell delete: mandatory backup/manifest failed (${message}).`,
-    `Shell delete blocked — backup or manifest write failed (${message}).`,
+    `Kodaelus blocked ApplyPatch: mandatory backup/manifest failed (${message}).`,
+    `ApplyPatch blocked — backup or manifest write failed (${message}).`,
   );
 }
 

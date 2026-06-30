@@ -13,19 +13,33 @@ import { join } from "node:path";
 const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/kodaelus-session.mjs",
   "node ./hooks/block-git-when-kodaelus.mjs",
-  "node ./hooks/block-entry-point-delete.mjs",
+  "node ./hooks/guard-delete.mjs",
+  "node ./hooks/guard-patch-delete.mjs",
   "node ./hooks/block-delete-shell.mjs",
+  "node ./hooks/scope-creep-guard.mjs",
+  "node ./hooks/confidence-evidence-guard.mjs",
+  "node ./hooks/manifest-verify.mjs",
 ]);
 
 /** Relative paths under ~/.cursor/hooks removed on uninstall. */
 export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "kodaelus-session.mjs",
   "block-git-when-kodaelus.mjs",
-  "block-entry-point-delete.mjs",
+  "guard-delete.mjs",
+  "guard-patch-delete.mjs",
   "block-delete-shell.mjs",
+  "scope-creep-guard.mjs",
+  "confidence-evidence-guard.mjs",
+  "manifest-verify.mjs",
   "lib/session-store.mjs",
   "lib/git-guard.mjs",
   "lib/entry-point-guard.mjs",
+  "lib/deletion-guard.mjs",
+  "lib/plan-estimate.mjs",
+  "lib/confidence-format.mjs",
+  "lib/patch-guard.mjs",
+  "lib/deletion-manifest-io.mjs",
+  "lib/suggestions-diff.mjs",
 ];
 
 export function mergeHooks(existing, template) {

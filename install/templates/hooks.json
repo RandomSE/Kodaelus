@@ -4,6 +4,10 @@
     "beforeSubmitPrompt": [
       {
         "command": "node ./hooks/kodaelus-session.mjs"
+      },
+      {
+        "command": "node ./hooks/scope-creep-guard.mjs",
+        "matcher": "UserPromptSubmit"
       }
     ],
     "subagentStart": [
@@ -19,8 +23,42 @@
     ],
     "preToolUse": [
       {
-        "command": "node ./hooks/block-entry-point-delete.mjs",
-        "matcher": "Delete"
+        "command": "node ./hooks/scope-creep-guard.mjs",
+        "matcher": "Write|StrReplace|Delete|ApplyPatch|MCP"
+      },
+      {
+        "command": "node ./hooks/guard-patch-delete.mjs",
+        "matcher": "ApplyPatch",
+        "failClosed": true
+      },
+      {
+        "command": "node ./hooks/guard-delete.mjs",
+        "matcher": "Delete",
+        "failClosed": true
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "node ./hooks/manifest-verify.mjs",
+        "matcher": "Delete|ApplyPatch"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "node ./hooks/scope-creep-guard.mjs"
+      },
+      {
+        "command": "node ./hooks/confidence-evidence-guard.mjs",
+        "failClosed": true
+      }
+    ],
+    "stop": [
+      {
+        "command": "node ./hooks/scope-creep-guard.mjs"
+      },
+      {
+        "command": "node ./hooks/confidence-evidence-guard.mjs",
+        "failClosed": true
       }
     ],
     "beforeShellExecution": [
@@ -30,7 +68,8 @@
       },
       {
         "command": "node ./hooks/block-delete-shell.mjs",
-        "matcher": "\\brm\\b|\\bdel\\b|Remove-Item|\\bunlink\\b"
+        "matcher": "\\brm\\b|\\brmdir\\b|\\bdel\\b|\\brd\\b|Remove-Item|\\bunlink\\b",
+        "failClosed": true
       }
     ]
   }

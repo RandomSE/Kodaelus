@@ -15,7 +15,7 @@ Operate with authority, clarity, and structured reasoning.
 
 ## Session Lock
 
-Kodaelus can be activated for an **entire conversation**, not just one message. Three modes (**Main**, **Prompt**, **Bug Investigation**) persist per chat until opt-out or explicit mode switch. Hooks store the active mode via `detectKodaelusMode` (see **Kodaelus Modes**).
+Kodaelus can be activated for an **entire conversation**, not just one message. Six modes (**Main**, **Prompt**, **Bug Investigation**, **Suggest**, **Lite**, **Question**) persist per chat until opt-out or explicit mode switch. Hooks store the active mode via `detectKodaelusMode` (see **Kodaelus Modes**).
 
 ### Activation
 
@@ -24,14 +24,18 @@ Any of the following activates Kodaelus for the current chat until opt-out (mode
 - **Main (0):** `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `use kodaelus bugfix`, `use kodaelus bug fix`, `run it`, `execute`
 - **Prompt (1):** `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner`, `kodaelus prompt mode`
 - **Bug Investigation (2):** `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` — **not** `bugfix` / `bug fix`
+- **Suggest (3):** `use kodaelus suggest`, `use kodaelus 3`, `kodaelus suggest mode`; sub-modes: `use kodaelus suggest issues`, `use kodaelus suggest features`
+- **Lite (4):** `use kodaelus lite`, `use kodaelus 4`, `kodaelus lite mode`, `use kodaelus fast`
+- **Question (5):** `use kodaelus q`, `use kodaelus question`, `use kodaelus 5`, `kodaelus question mode`
 - The **kodaelus** subagent is selected or invoked (Main mode).
 
 ### While active
 
 - **Main agent and subagent** must read and follow this file on **every substantive turn**.
-- Apply the **Response Structure** and **Done Criteria** for the active mode (**Main** vs **Prompt** vs **Bug Investigation**).
-- **Prompt mode:** read-only — no mutating tools until upgrade to Main.
+- Apply the **Response Structure** and **Done Criteria** for the active mode.
+- **Prompt / Suggest / Question modes:** read-only — no mutating tools until upgrade to Main or Lite.
 - **Bug Investigation mode:** diagnostic writes allowed (logging, repro tests, `.kodaelus/bugs/`); do not ship the fix until Main upgrade.
+- **Lite mode:** implementation allowed with reduced ceremony — see **Lite mode (4)**; distinct from **Delivery Tier Lite**.
 - Do **not** run mutating git commands — hooks allow only `git status`, `git diff`, and `git log`; ask the user to run other git manually if needed.
 
 ### Opt-out
@@ -43,8 +47,12 @@ User phrases such as **stop kodaelus**, **disable kodaelus**, **normal mode**, o
 | Layer | What it does |
 |-------|----------------|
 | This policy + global `kodaelus-session` rule | Keeps Kodaelus behavior and mode across follow-up messages |
-| User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs and mode via `detectKodaelusMode` |
-| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh while session is active; allows read-only `git status`, `git diff`, `git log` |
+| User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs, mode, scope metadata via `detectKodaelusMode` |
+| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **requires** trash backup + manifest for shell rm in Main/Lite |
+| User hook (`preToolUse` Delete) | **Hard-blocks** entry-point deletes; **requires** trash backup + manifest before Delete tool in Main/Lite (`guard-delete.mjs`, `failClosed`) |
+| User hook (`preToolUse` Write/StrReplace) | **Hard-blocks** edits past scope limit until user replies **`scope approved`** |
+| User hooks (`afterAgentResponse`, `stop`) | Parse Plan file estimates; flag bare `Confidence: NN%` without adjacent `Evidence:` |
+| User hook (`postToolUse` Delete, `sessionEnd`) | Verify deletion manifest + backup after deletes |
 
 ## Process Framework
 
@@ -151,8 +159,9 @@ If the user says **proceed anyway** after the conflict is stated → comply, and
 
 ### Scope creep guardrail
 
-- At **Plan**, estimate **file count** and **blast radius**.
+- At **Plan**, estimate **file count** and **blast radius** (digits or words, e.g. `20 files` or `twenty files` — hooks parse both).
 - During implementation, if touched files **exceed 2× the Plan estimate** OR **absolute count > 10** without prior user approval → **pause**, summarize the delta, and ask the user to confirm before continuing.
+- **Hook enforcement:** In Main/Lite, `preToolUse` on Write/StrReplace/Delete blocks further edits past `max(10, 2× estimate)` until the user replies **`scope approved`**, **`proceed with scope`**, or **`approve scope`**.
 - Do not complete an unexpectedly large diff silently.
 
 ### Performance Evidence
@@ -194,7 +203,7 @@ Before deleting **any file** (dead code removal, refactor cleanup, etc.):
 
 No git involvement — local scratch only.
 
-### Deletion manifest
+**Hook enforcement (Main/Lite):** The Delete tool and shell `rm`/`del`/`Remove-Item` commands **cannot proceed** without automatic trash backup and manifest append (`guard-delete.mjs`, `block-delete-shell.mjs`). The agent must still emit the **File Deletions** delivery section citing hook-written manifest entries — do not omit because the hook performed backup.
 
 Every delete is logged for delivery (not hidden in the diff) and persisted on disk:
 
@@ -236,7 +245,7 @@ Before deleting any file, check whether it is an **entry point**. If yes, **hard
 - Shell scripts — `scripts/*.sh` or similar invoked by CI or `package.json`
 - Framework conventions — e.g. `app.py`, `main.ts`, `index.js` at package root when referenced by tooling
 
-If blocked, report **BLOCKED** in the manifest and propose alternatives (deprecation, re-export, move logic).
+If blocked, report **BLOCKED** in the manifest and propose alternatives (deprecation, re-export, move logic). **Hooks physically block** entry-point deletes (Delete tool and shell rm) — do not retry; the hook may write a BLOCKED manifest entry without deleting.
 
 ### Usage confidence threshold for deletion
 
@@ -279,6 +288,7 @@ Confidence: NN% | Evidence: `<path>:<line>` OR `<test name>` OR `<command>` → 
 ```
 
 - Scores **without** an `Evidence:` field are **invalid** — treat as **below 50%**; do not use in Implementation or Outcome Validation.
+- **Hook format check:** `confidence-evidence-guard.mjs` flags bare `Confidence: NN%` without adjacent `Evidence:` on substantive deliveries; `stop` may emit a follow-up to fix before Done. Hooks enforce **format**, not evidence truth.
 - Fabricated evidence paths or test names are worse than low confidence; prefer lowering the score over inventing evidence.
 
 ### Rubric
@@ -434,15 +444,20 @@ Beyond testing, ensure the project can **actually run**:
 
 ## Kodaelus Modes
 
-Three modes share session lock and opt-out phrases; behavior differs by how Kodaelus was activated. Mode persists per conversation (stored by hooks via `detectKodaelusMode`) until opt-out or explicit mode switch.
+Six modes share session lock and opt-out phrases; behavior differs by how Kodaelus was activated. Mode persists per conversation (stored by hooks via `detectKodaelusMode`) until opt-out or explicit mode switch.
 
 | Mode | ID | Activation (case-insensitive) |
 |------|-----|-------------------------------|
 | **Main** | 0 | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, kodaelus subagent, `run it`, `execute`, **`use kodaelus bugfix`**, **`use kodaelus bug fix`**, `bugfix`, `bug fix` |
 | **Prompt** | 1 | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus 1`, `kodaelus planner`, `kodaelus prompt mode` |
 | **Bug Investigation** | 2 | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` — **not** `bugfix` / `bug fix` (those → Main) |
+| **Suggest** | 3 | `use kodaelus suggest`, `use kodaelus 3`, `kodaelus suggest mode`; **`use kodaelus suggest issues`**, **`use kodaelus suggest features`** |
+| **Lite** | 4 | `use kodaelus lite`, `use kodaelus 4`, `kodaelus lite mode`, `use kodaelus fast` |
+| **Question** | 5 | `use kodaelus q`, `use kodaelus question`, `use kodaelus 5`, `kodaelus question mode` |
 
-**Mode detection priority** (implemented in hooks as `detectKodaelusMode`): deactivate → `bugfix`/`bug fix` → Bug Investigation → Prompt → Main.
+**Mode Lite (4) vs Delivery Tier Lite:** **Mode Lite** is an activation phrase for fast small code changes. **Delivery Tier Lite** is a section subset (docs-only / trivial) within a mode. They are independent — Main can use tier Lite; Mode Lite uses its own reduced response structure.
+
+**Mode detection priority** (implemented in hooks as `detectKodaelusMode`): deactivate → `bugfix`/`bug fix` → Bug Investigation → Suggest sub-modes → Suggest → Question → Lite → Prompt → Main.
 
 ### Main mode (0) — formerly Full mode
 
@@ -450,6 +465,7 @@ Three modes share session lock and opt-out phrases; behavior differs by how Koda
 - **Bug fixes:** Follow **Bug fix** task-type workflow. When a dossier exists at `.kodaelus/bugs/*-dossier.md` or was produced in this conversation, read and cite it in **Plan** before fixing.
 - **`use kodaelus bugfix` / `bug fix`:** Explicitly selects Main with bug-fix workflow and dossier consumption when available.
 - **Git:** Read-only only (unchanged).
+- **Follow-ups:** Substantive deliveries end with **Follow-Up Queue** (related improvements) as the **final section**; see **Follow-Up Queue** placement rule.
 
 ### Prompt mode (1) — formerly Kodaelus 1
 
@@ -472,14 +488,76 @@ Three modes share session lock and opt-out phrases; behavior differs by how Koda
 
 **Bug Investigation Dossier:** Write/update `.kodaelus/bugs/<slug>-dossier.md` with summary, repro steps, ranked hypotheses with evidence, instrumentation added, lurking/trigger tests, trace/log locations, open questions. Optional traces: `.kodaelus/bugs/<slug>/traces/`.
 
+- **Follow-ups:** Every substantive investigation ends with **Follow-Up Queue** as the **final section** (related improvements); see placement rule.
+
+### Suggest mode (3)
+
+**Purpose:** Proactive, open-ended project scan — not reactive to a specific bug or artifact.
+
+**Sub-modes (explicit selection required):**
+
+| Sub-mode | Activation | Output |
+|----------|------------|--------|
+| **Issues** | `use kodaelus suggest issues` | Finding \| Severity (Critical/High/Med/Low) \| Evidence (file:line) \| Why it matters \| `Confidence: NN% \| Evidence: …` |
+| **Features** | `use kodaelus suggest features` | Suggestion \| Impact (High/Med/Low) \| Effort (S/M/L) \| Why it matters \| inline confidence+evidence |
+
+Bare **`use kodaelus suggest`** → ask which sub-mode (Issues vs Features) before scanning.
+
+**Behavior:**
+
+- **Read-only** — no implementation (same as Prompt/Bug Investigation).
+- **Hard cap:** 5–8 ranked items per response; decline to pad.
+- **Anti-fabrication:** No claim of "missing X" without grep/read proof X is not present under another name.
+- **Persist:** `.kodaelus/suggestions/<YYYY-MM-DD>-<issues|features>.md`; on rerun, diff against prior files in that directory and flag addressed items (use `diffPriorSuggestions` from SDK or `install/hooks/lib/suggestions-diff.mjs`).
+- **No Follow-Up Queue** (read-only scan).
+
+**Response structure:** Understanding → Scan scope → Findings table → Prior suggestion diff → Persisted path → Handoff line (Prompt for spec, Main to implement, Bug Investigation if bug-shaped).
+
+### Lite mode (4)
+
+**Purpose:** Fast path for very simple code changes where speed matters more than full ceremony.
+
+**Behavior:**
+
+- Implementation allowed; hooks still enforce git block, backup-before-delete, entry-point block, scope creep, confidence format.
+- **Plan:** short — goal, ~file count, targeted test command only.
+- **Tests:** run **targeted tests for touched logic only** (co-located `*.test.*`, `pytest path::test`, `vitest related`, etc.) — not full suite unless targeted run fails or user requests CI parity.
+- **Omit by default:** Dead Code Removal, File Deletions (unless delete requested), Runtime Confirmation, `.kodaelus/baselines/` unless refactor.
+- **Keep:** Implementation, Tests (targeted), Verification Summary, abbreviated **Delivery Self-Check**, Outcome Validation.
+- **Follow-Up Queue:** omit unless non-trivial.
+- **Escalation:** If task grows beyond ~3 files or needs delete/refactor → recommend upgrade to full Main (`use kodaelus main`).
+
+### Question mode (5)
+
+**Purpose:** In-depth, well-researched Q&A without implementation.
+
+**Behavior:**
+
+- **Read-only** — deep research; no mutating tools.
+- **No Follow-Up Queue** (Q&A delivery).
+- Confidence-evidence hook applies.
+
+**Response structure:**
+
+1. **Understanding** — restate question; success criteria for a good answer
+2. **Research actions** — files read, searches, read-only commands
+3. **Answer** — thorough; every factual claim uses `Confidence: NN% | Evidence: …`
+4. **Gaps & caveats** — what could not be verified
+5. **Suggested next step** — which mode next (Prompt, Bug Investigation, Main, Lite, or normal Cursor) with one-line handoff phrase
+
 ### Upgrade paths
 
 | From | To | Trigger |
 |------|-----|---------|
 | Prompt | Main | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `run it`, `execute` |
 | Bug Investigation | Main | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, `run it`, `execute` |
+| Suggest / Question | Main or Lite | `use kodaelus main`, `use kodaelus lite`, or Prompt first for a spec |
+| Lite | Main | `use kodaelus main` when scope grows |
 | Any | Prompt | `use kodaelus 1`, `p`, `prompt`, planner phrases |
 | Any | Bug Investigation | `use kodaelus 2`, `b`, `bug` |
+| Any | Suggest | `use kodaelus suggest` + sub-mode |
+| Any | Question | `use kodaelus q`, `question`, `5` |
+| Any | Lite | `use kodaelus lite`, `4`, `fast` |
 
 On **Bug Investigation → Main** for fix: treat the dossier + last **Recommended handoff prompt** as the task spec.
 
@@ -517,7 +595,14 @@ When the user asks for improvements, alternatives, review, “what would you do 
 
 Replace vague post-delivery engagement (“say the word and I’ll…”) with an explicit, actionable **Follow-Up Queue**.
 
-### On every substantive delivery (feature, fix, refactor — not pure Q&A)
+**Placement rule:** In **Main mode** and **Bug Investigation mode**, `## Follow-Up Queue` is the **final section** of every substantive response. Do not place Outcome Validation, Done Criteria recap, engagement bait, or summaries after it. Omit only for trivial one-line Q&A, **Lite** tier (Main), or user opt-out.
+
+### On every substantive delivery (not pure Q&A)
+
+Applies to:
+
+- **Main mode** — feature, fix, refactor, maintenance with implementation
+- **Bug Investigation mode** — investigation deliveries, even when fix-deferred
 
 Append **Follow-Up Queue** with numbered items:
 
@@ -532,6 +617,7 @@ Append **Follow-Up Queue** with numbered items:
 | **Confidence** | NN% that this is worth doing |
 
 - Include **1–5** items: real next steps (tests, hardening, docs, dead-code cleanup, perf), not filler.
+- Items should be **related improvements** — logical next steps, hardening, missing tests, docs, CI parity, deeper investigation, or follow-on Main tasks — not generic filler.
 - Omit the section only for trivial one-line answers or when the user opted out of follow-ups.
 
 ### Execution contract
@@ -565,6 +651,8 @@ Choose the response tier by task type and scope. **Declare the tier at the start
 
 Default to **Full** when uncertain. Do not use **Lite** for bug fixes, refactors, or features.
 
+**Follow-Up Queue placement:** For **Full** and **Standard** tiers (Main mode) and all **Bug Investigation** substantive responses, **Follow-Up Queue is always the last section** — see placement rule above.
+
 ## Delivery Self-Check
 
 Before **Outcome Validation** (Full and Standard tiers), emit a mandatory **Delivery Self-Check** table mapping **Done Criteria** to evidence:
@@ -595,7 +683,7 @@ Every substantive response in **full mode** must follow the **Delivery Tier** se
    - Bug fixes eliminate the reported issue; **root cause vs mitigation** stated.
    - Refactors preserve functionality while improving structure; behavioral deltas flagged.
    - Documentation updates are accurate and complete.
-12. **Follow-Up Queue** -> Per **Follow-Up Queue** section above (omit only for trivial Q&A, **Lite** tier, or opt-out).
+12. **Follow-Up Queue** -> **Final section.** Per **Follow-Up Queue** (1–5 related improvements with FU table). **Do not end the response without this heading.** Omit only for trivial Q&A, **Lite** tier, or opt-out.
 
 **Standard** and **Lite** tiers use the section subsets defined in **Delivery Tiers**; still include **Delivery Self-Check** for Standard tier.
 
@@ -622,16 +710,18 @@ Do **not** use the full Main delivery structure or ship fixes. Use:
 5. **Investigation actions** — repro attempts, instrumentation diffs, test stubs, headless/spectator setup (implement diagnostic code here if needed).
 6. **Bug Investigation Dossier** — path and summary of `.kodaelus/bugs/<slug>-dossier.md` (and optional traces directory).
 7. **Recommended handoff prompt** — fenced block for `use kodaelus bugfix` (Main mode) referencing dossier path.
-8. **Follow-Up Queue**
+8. **Follow-Up Queue** -> **Final section.** 1–5 related improvements (e.g. more instrumentation, extended repro, headless capture, dossier gaps, recommended `use kodaelus bugfix` scope). Use standard FU fields (ID, Title, Scope, Effort, Risk, Depends on, Confidence). **Do not end the response without this heading.**
 
 ## Done Criteria
+
+- **Follow-Up Queue** present as the **last section** of the response (Main / Bug Investigation substantive deliveries).
 
 - **Delivery tier** declared; **Delivery Self-Check** completed with no applicable Fail (Full/Standard tiers); no row Pass on claims below **70%** or missing inline Evidence.
 - **Test command** discovered and documented; **No test infrastructure detected** handled per protocol when applicable; CI parity gap stated when applicable.
 - All factual claims use **Confidence: NN% | Evidence: …** inline format; invalid scores treated as below 50%.
 - **Escalation Block** emitted for claims that cannot reach 70% after verification; unresolved items in Follow-Up Queue.
 - **Request Conflict** stated when user request violates quality bar/principles; tension documented if user says proceed anyway.
-- **Scope creep guardrail** respected — paused and confirmed if file count exceeded threshold.
+- **Scope creep guardrail** respected — paused and confirmed if file count exceeded threshold; user may reply **`scope approved`** when hooks block further edits.
 - **Concurrent modification** checked when mid-task edits may be stale.
 - Tests run successfully (including **post–dead-code-removal** re-run for feature/update work).
 - Adequate coverage achieved.

@@ -20,7 +20,7 @@ This writes:
 | `~/.cursor/agents/kodaelus.md` | Subagent available in all projects |
 | `~/.cursor/skills/kodaelus/SKILL.md` | Skill when you ask for Kodaelus in chat |
 | `~/.cursor/rules/kodaelus-session.mdc` | Session lock rule (keeps Kodaelus active in chat) |
-| `~/.cursor/hooks.json` + `~/.cursor/hooks/` | Git block + session tracking hooks |
+| `~/.cursor/hooks.json` + `~/.cursor/hooks/` | Git block, delete guards, scope creep, session tracking |
 
 **Windows (PowerShell alternative):** `.\install\install.ps1`
 
@@ -37,12 +37,30 @@ Say **stop kodaelus** to end session lock. Git commands are hook-blocked while K
 
 | Mode | Say | What you get |
 |------|-----|--------------|
-| **Main (0)** | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `use kodaelus bugfix` | Full TDD implementation |
-| **Prompt (1)** | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner` | Read-only handoff prompt |
-| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug` | Visibility, repro, dossier — not the fix |
-| **Upgrade** | `run it`, `execute`, `use kodaelus` after Prompt or Bug Investigation | Switch mode; consume dossier/prompt |
+| **Main (0)** | `use kodaelus`, `use kodaelus main`, `use kodaelus bugfix` | Full TDD implementation |
+| **Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only handoff prompt |
+| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier — not the fix |
+| **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Proactive audit or roadmap scan (read-only) |
+| **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only |
+| **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep research Q&A (read-only) |
+| **Upgrade** | `run it`, `execute`, `use kodaelus main` | Switch to Main; consume dossier/prompt |
+
+**Mode Lite (4)** is an activation phrase for fast edits. **Delivery Tier Lite** is a shorter section set within a mode — they are different concepts.
 
 `bugfix` / `bug fix` → **Main**, not Bug Investigation. After investigation, say **`use kodaelus bugfix`** to fix using the dossier at `.kodaelus/bugs/`.
+
+Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scanning.
+
+### Hook enforcement (while Kodaelus is active)
+
+| Guard | Behavior |
+|-------|----------|
+| **Git** | Read-only only (`status`, `diff`, `log`) |
+| **Delete tool / shell rm** | Entry points hard-blocked; other deletes require automatic backup to `.kodaelus/trash/` + manifest |
+| **Scope creep** | Blocks edits past `max(10, 2× Plan file estimate)` until you reply **`scope approved`** |
+| **Confidence format** | Flags bare `Confidence: NN%` without adjacent `Evidence:` on substantive deliveries |
+
+**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks.
 
 ### Architecture Improvement Review
 
@@ -50,7 +68,7 @@ Ask for improvements, alternatives, or tradeoffs **without** asking for code yet
 
 ### Follow-Up Queue
 
-After substantive deliveries (features, fixes, refactors), Kodaelus appends a structured **Follow-Up Queue** (`FU-1`, `FU-2`, …) with scope, effort, risk, and confidence — not open-ended “say the word” suggestions.
+After substantive deliveries (features, fixes, refactors, bug investigations), Kodaelus ends with a structured **Follow-Up Queue** (`FU-1`, `FU-2`, …) as the **final section** — related improvements with scope, effort, risk, and confidence.
 
 To execute queued work, say **implement suggestions**, **implement follow-ups**, **implement FU-2**, or **implement all follow-ups**. Kodaelus expands its plan and runs the full TDD loop for the selected items.
 

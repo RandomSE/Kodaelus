@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,9 +92,9 @@ test("denies shell rm on entry-point when Kodaelus session is active", async () 
   deactivateSession("conv-shell-active");
 });
 
-test("allows shell rm on non-entry-point when Kodaelus session is active", async () => {
+test("backs up and allows shell rm on non-entry-point when Kodaelus session is active", async () => {
   seedEntryPointProject(tempProject);
-  activateSession("conv-shell-util");
+  activateSession("conv-shell-util", "main");
 
   const { code, stdout } = await runHook({
     conversation_id: "conv-shell-util",
@@ -104,6 +104,12 @@ test("allows shell rm on non-entry-point when Kodaelus session is active", async
 
   assert.equal(code, 0);
   assert.deepEqual(JSON.parse(stdout), { permission: "allow" });
+
+  const manifest = JSON.parse(
+    readFileSync(join(tempProject, ".kodaelus/deletion-manifest.json"), "utf8"),
+  );
+  assert.equal(manifest[0].path, "util.js");
+  assert.ok(existsSync(join(tempProject, manifest[0].backup)));
 
   deactivateSession("conv-shell-util");
 });

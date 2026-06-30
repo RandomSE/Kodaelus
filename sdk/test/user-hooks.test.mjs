@@ -24,7 +24,7 @@ describe("user-hooks merge", () => {
           { command: "node ./hooks/block-git-when-kodaelus.mjs" },
           { command: "node ./hooks/block-delete-shell.mjs" },
         ],
-        preToolUse: [{ command: "node ./hooks/block-entry-point-delete.mjs" }],
+        preToolUse: [{ command: "node ./hooks/guard-delete.mjs" }],
         sessionEnd: [{ command: "node ./hooks/kodaelus-session.mjs" }],
       },
     };
