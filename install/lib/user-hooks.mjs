@@ -16,6 +16,7 @@ const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/guard-delete.mjs",
   "node ./hooks/guard-patch-delete.mjs",
   "node ./hooks/block-delete-shell.mjs",
+  "node ./hooks/block-readonly-shell.mjs",
   "node ./hooks/scope-creep-guard.mjs",
   "node ./hooks/confidence-evidence-guard.mjs",
   "node ./hooks/manifest-verify.mjs",
@@ -28,6 +29,7 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "guard-delete.mjs",
   "guard-patch-delete.mjs",
   "block-delete-shell.mjs",
+  "block-readonly-shell.mjs",
   "scope-creep-guard.mjs",
   "confidence-evidence-guard.mjs",
   "manifest-verify.mjs",
@@ -40,6 +42,14 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "lib/patch-guard.mjs",
   "lib/deletion-manifest-io.mjs",
   "lib/suggestions-diff.mjs",
+  "lib/mode-guard.mjs",
+  "lib/kodaelus-mode.mjs",
+  "lib/shell-mutator-guard.mjs",
+  "lib/project-guidelines.mjs",
+  "lib/preference-intent.mjs",
+  "lib/preference-learning.mjs",
+  "lib/restore.mjs",
+  "lib/restore-handler.mjs",
 ];
 
 export function mergeHooks(existing, template) {

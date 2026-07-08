@@ -33,6 +33,35 @@ This writes:
 
 Say **stop kodaelus** to end session lock. Git commands are hook-blocked while Kodaelus is active in a chat.
 
+### Project-specific guidelines
+
+Each workspace can keep supplemental Kodaelus preferences at **`.kodaelus/instructions.md`** (local, gitignored by default). Kodaelus reads global policy first, then project guidelines; project rules override global on non-safety conflicts (git, deletion, scope creep, and confidence format stay global).
+
+On first substantive technical work, Kodaelus bootstraps the file from `install/templates/project-instructions.template.md` and ensures `.kodaelus/` is in `.gitignore`. Repeated user preferences (~3×) append to `## Preferences` with tracking in `.kodaelus/preference-log.json`.
+
+SDK helpers: `loadProjectGuidelines()`, `ensureProjectGuidelines()`, `loadInstructionsWithProjectGuidelines()`, `recordPreferenceCandidate()`, `projectGuidelinesPath()`.
+
+Example `.kodaelus/instructions.md` (created automatically on first technical task):
+
+```markdown
+# Project guidelines (Kodaelus)
+
+Supplemental guidelines for this repository. Read together with global Kodaelus policy.
+
+## Preferences
+
+2026-07-08 | source: repeated request | Always run vitest with --coverage for this repo
+
+## Conventions
+
+- API routes live under `src/routes/`; match existing error envelope `{ error, code }`.
+- Prefer `pnpm` over npm in scripts and docs.
+
+## Notes
+
+- Staging API base URL is in `.env.example` as `STAGING_API_URL`.
+```
+
 ### Modes
 
 | Mode | Say | What you get |
@@ -56,11 +85,32 @@ Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scann
 | Guard | Behavior |
 |-------|----------|
 | **Git** | Read-only only (`status`, `diff`, `log`) |
+| **Read-only modes** | `prompt` / `suggest` / `question` block Write, StrReplace, Delete, ApplyPatch |
+| **Read-only shell** | `block-readonly-shell` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file redirects `>` / `>>`, etc.) |
+| **Bug Investigation** | Deletes outside `.kodaelus/` blocked; `.kodaelus/` diagnostic artifacts allowed |
 | **Delete tool / shell rm** | Entry points hard-blocked; other deletes require automatic backup to `.kodaelus/trash/` + manifest |
 | **Scope creep** | Blocks edits past `max(10, 2× Plan file estimate)` until you reply **`scope approved`** |
 | **Confidence format** | Flags bare `Confidence: NN%` without adjacent `Evidence:` on substantive deliveries |
+| **Project guidelines** | Bootstrapped on activation; `restore <file>` / `undo last delete` phrases restore from manifest |
+| **Preferences** | ~3× repeated requests append to `.kodaelus/instructions.md` via hook |
 
-**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks.
+### SDK vs IDE
+
+| Capability | Cursor IDE (hooks) | SDK (`runKodaelus`) |
+|------------|-------------------|---------------------|
+| Policy text + project guidelines | Yes | Yes |
+| Mode detection from task string | Yes | Yes (prompt header only) |
+| Git read-only enforcement | **Hook-enforced** | Not enforced — use IDE |
+| Delete backup / manifest | **Hook-enforced** | Not enforced — use IDE or `npm run restore` |
+| Scope creep guard | **Hook-enforced** | Not enforced |
+| Confidence format flag | **Hook-enforced** | Not enforced |
+| Read-only mode tool block | **Hook-enforced** | Policy instruction only |
+| Read-only shell mutator block | **Hook-enforced** (`block-readonly-shell`) | Soft warn via `runSdkPreflight()` |
+| Preflight / limitation notice | Hooks + UI | `runSdkPreflight()` stderr warnings |
+
+The SDK is for **programmatic runs with policy preloaded**, not a full replacement for IDE hooks. Use Cursor with Kodaelus active when you need hard safety guards.
+
+**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks (needed for `block-readonly-shell` and other new hooks). Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent — it should be denied — then **`stop kodaelus`**.
 
 ### Architecture Improvement Review
 
@@ -126,6 +176,14 @@ import {
   readDeletionManifest,
   restoreDeletedFile,
   undoLastDeletion,
+  loadProjectGuidelines,
+  ensureProjectGuidelines,
+  loadInstructionsWithProjectGuidelines,
+  recordPreferenceCandidate,
+  extractPreferenceIntent,
+  normalizePreferenceKey,
+  runSdkPreflight,
+  projectGuidelinesPath,
 } from "@kodaelus/sdk-runner";
 ```
 

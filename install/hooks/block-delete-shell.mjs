@@ -20,9 +20,15 @@ import {
 import {
   addPendingDelete,
   getSessionMode,
+  isBugInvestigationMode,
   isMutatingMode,
+  isReadOnlyMode,
   isSessionActive,
 } from "./lib/session-store.mjs";
+import {
+  denyBugModeDelete,
+  denyReadOnlyShellDelete,
+} from "./lib/mode-guard.mjs";
 
 async function readInput() {
   const chunks = [];
@@ -75,6 +81,11 @@ try {
   const mode = getSessionMode(conversationId) ?? "main";
   const projectRoot = resolveProjectRoot(input, targets[0]);
 
+  if (isReadOnlyMode(mode)) {
+    const denial = denyReadOnlyShellDelete();
+    deny(denial.user_message, denial.agent_message);
+  }
+
   for (const target of targets) {
     let rel;
     try {
@@ -85,6 +96,11 @@ try {
 
     if (isKodaelusArtifactPath(rel)) {
       continue;
+    }
+
+    if (isBugInvestigationMode(mode) && !isKodaelusArtifactPath(rel)) {
+      const denial = denyBugModeDelete(rel);
+      deny(denial.user_message, denial.agent_message);
     }
 
     const absolutePath = join(projectRoot, rel);

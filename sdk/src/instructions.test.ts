@@ -1,12 +1,19 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { validateInstructionsPolicy } from "../../install/lib/instructions-policy-keywords.mjs";
 import {
+  ensureProjectGuidelines,
   globalInstructionsPath,
   loadInstructions,
+  loadInstructionsWithProjectGuidelines,
+  loadProjectGuidelines,
+  normalizePreferenceKey,
+  PREFERENCE_LOG_REL,
+  projectGuidelinesPath,
   projectInstructionsPath,
+  recordPreferenceCandidate,
   resolveDistributionRepoRoot,
   resolveInstructionsPath,
   wrapTaskWithInstructions,
@@ -135,6 +142,18 @@ describe("loadInstructions", () => {
     expect(content).toContain("scope approved");
   });
 
+  it("includes project-specific guidelines policy", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    const content = await loadInstructions({
+      cwd: repoRoot,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+    });
+    expect(content).toContain("## Project-Specific Guidelines");
+    expect(content).toContain(".kodaelus/instructions.md");
+    expect(content).toContain(".kodaelus/preference-log.json");
+    expect(content).toContain("ensureProjectGuidelines");
+  });
+
   it("includes hardened policy keywords shared with install smoke tests", async () => {
     const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
     const content = await loadInstructions({
@@ -142,6 +161,173 @@ describe("loadInstructions", () => {
       cursorHome: path.join(repoRoot, ".cursor-missing"),
     });
     expect(validateInstructionsPolicy(content)).toEqual([]);
+  });
+});
+
+describe("projectGuidelinesPath", () => {
+  it("points to .kodaelus/instructions.md under cwd", () => {
+    const repo = path.resolve("/repo");
+    expect(projectGuidelinesPath("/repo")).toBe(
+      path.join(repo, ".kodaelus", "instructions.md"),
+    );
+  });
+});
+
+describe("loadProjectGuidelines", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) {
+      await import("node:fs/promises").then(({ rm }) =>
+        rm(tempDir, { recursive: true, force: true }),
+      );
+    }
+  });
+
+  it("returns null when project guidelines are absent", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-guidelines-"));
+    await expect(loadProjectGuidelines({ cwd: tempDir })).resolves.toBeNull();
+  });
+
+  it("reads existing project guidelines", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-guidelines-"));
+    const guidelinesPath = projectGuidelinesPath(tempDir);
+    await mkdir(path.dirname(guidelinesPath), { recursive: true });
+    await writeFile(guidelinesPath, "# Project guidelines\n", "utf8");
+
+    await expect(loadProjectGuidelines({ cwd: tempDir })).resolves.toContain(
+      "Project guidelines",
+    );
+  });
+});
+
+describe("ensureProjectGuidelines", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) {
+      await import("node:fs/promises").then(({ rm }) =>
+        rm(tempDir, { recursive: true, force: true }),
+      );
+    }
+  });
+
+  it("creates guidelines and gitignore entry in a git repo", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-ensure-"));
+    await mkdir(path.join(tempDir, ".git"), { recursive: true });
+
+    const first = await ensureProjectGuidelines({ cwd: tempDir });
+    expect(first.created).toBe(true);
+    expect(first.path).toBe(projectGuidelinesPath(tempDir));
+
+    const guidelines = await readFile(first.path, "utf8");
+    expect(guidelines).toContain("# Project guidelines (Kodaelus)");
+    expect(guidelines).toContain("## Preferences");
+
+    const gitignore = await readFile(path.join(tempDir, ".gitignore"), "utf8");
+    expect(gitignore).toContain(".kodaelus/");
+  });
+
+  it("is idempotent on a second call", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-ensure-"));
+    await mkdir(path.join(tempDir, ".git"), { recursive: true });
+
+    const first = await ensureProjectGuidelines({ cwd: tempDir });
+    const second = await ensureProjectGuidelines({ cwd: tempDir });
+
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.path).toBe(first.path);
+  });
+});
+
+describe("loadInstructionsWithProjectGuidelines", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) {
+      await import("node:fs/promises").then(({ rm }) =>
+        rm(tempDir, { recursive: true, force: true }),
+      );
+    }
+  });
+
+  it("bootstraps and appends project guidelines to global policy", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-combined-"));
+    const localPath = projectInstructionsPath(tempDir);
+    await mkdir(path.dirname(localPath), { recursive: true });
+    await writeFile(localPath, "# Global policy body", "utf8");
+
+    const guidelinesPath = projectGuidelinesPath(tempDir);
+    await mkdir(path.dirname(guidelinesPath), { recursive: true });
+    await writeFile(guidelinesPath, "## Conventions\n\nUse vitest.\n", "utf8");
+
+    const combined = await loadInstructionsWithProjectGuidelines({
+      cwd: tempDir,
+      cursorHome: path.join(tempDir, "no-global"),
+    });
+
+    expect(combined).toContain("# Global policy body");
+    expect(combined).toContain("## Project-specific guidelines");
+    expect(combined).toContain("Use vitest.");
+  });
+});
+
+describe("recordPreferenceCandidate", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) {
+      await import("node:fs/promises").then(({ rm }) =>
+        rm(tempDir, { recursive: true, force: true }),
+      );
+    }
+  });
+
+  it("normalizes preference keys loosely", () => {
+    expect(normalizePreferenceKey("  Use   Vitest ")).toBe("use vitest");
+    expect(normalizePreferenceKey("run vitest")).toBe("run vitest");
+  });
+
+  it("tracks counts and appends on the third occurrence", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-pref-"));
+
+    const first = await recordPreferenceCandidate("use vitest", { cwd: tempDir });
+    const second = await recordPreferenceCandidate("Use vitest", { cwd: tempDir });
+    const third = await recordPreferenceCandidate("use  vitest", { cwd: tempDir });
+
+    expect(first).toEqual({ count: 1, appended: false, guidelineLine: undefined });
+    expect(second).toEqual({ count: 2, appended: false, guidelineLine: undefined });
+    expect(third.appended).toBe(true);
+    expect(third.guidelineLine).toContain("use vitest");
+    expect(third.count).toBe(0);
+
+    const guidelines = await readFile(projectGuidelinesPath(tempDir), "utf8");
+    expect(guidelines).toContain("source: repeated request | use vitest");
+
+    const fourth = await recordPreferenceCandidate("use vitest", { cwd: tempDir });
+    expect(fourth).toEqual({ count: 1, appended: false, guidelineLine: undefined });
+  });
+
+  it("rejects empty preference intent", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-pref-"));
+    await expect(recordPreferenceCandidate("  ", { cwd: tempDir })).rejects.toThrow(
+      /empty/i,
+    );
+  });
+
+  it("resets preference log when JSON is corrupted", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-pref-corrupt-"));
+    const logPath = path.join(tempDir, PREFERENCE_LOG_REL);
+    await mkdir(path.dirname(logPath), { recursive: true });
+    await writeFile(logPath, "not-json{{{", "utf8");
+
+    const result = await recordPreferenceCandidate("use vitest", { cwd: tempDir });
+    expect(result).toEqual({ count: 1, appended: false, guidelineLine: undefined });
+
+    const log = JSON.parse(await readFile(logPath, "utf8"));
+    expect(log.candidates).toHaveLength(1);
+    expect(log.candidates[0].key).toBe("use vitest");
   });
 });
 

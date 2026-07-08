@@ -1,46 +1,41 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: CI
 
 on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
 
 jobs:
-  root:
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node-version }}
 
-      - name: Policy and hook tests
+      - name: Root hooks + install tests
         run: npm test
 
-  sdk:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Install SDK deps
         working-directory: sdk
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: sdk/package-lock.json
-
-      - name: Install dependencies
         run: npm ci
 
-      - name: Test
+      - name: SDK tests
+        working-directory: sdk
         run: npm test
 
-      - name: Build
-        run: npm run build
-
-      - name: Verify public exports
-        run: npm run verify:exports
+      - name: SDK build + export verify
+        working-directory: sdk
+        run: |
+          npm run build
+          npm run verify:exports

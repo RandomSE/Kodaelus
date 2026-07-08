@@ -139,7 +139,7 @@ test("backs up and allows Delete on non-entry-point file when Kodaelus session i
   deactivateSession("conv-active-util");
 });
 
-test("skips backup in prompt mode but still blocks entry-point", async () => {
+test("denies all deletes in prompt mode including entry-point and util files", async () => {
   seedEntryPointProject(tempProject);
   activateSession("conv-prompt", "prompt");
 
@@ -149,19 +149,16 @@ test("skips backup in prompt mode but still blocks entry-point", async () => {
     workspace_roots: [tempProject],
   });
   assert.equal(JSON.parse(entry.stdout).permission, "deny");
+  assert.match(JSON.parse(entry.stdout).user_message, /read-only/i);
 
   const util = await runHook({
     conversation_id: "conv-prompt",
     tool_input: { path: join(tempProject, "util.js") },
     workspace_roots: [tempProject],
   });
-  assert.deepEqual(JSON.parse(util.stdout), { permission: "allow" });
-
-  const manifest = JSON.parse(
-    readFileSync(join(tempProject, ".kodaelus/deletion-manifest.json"), "utf8"),
-  );
-  assert.ok(manifest.every((row) => row.path !== "util.js"));
-  assert.ok(manifest.every((row) => !row.backup));
+  assert.equal(JSON.parse(util.stdout).permission, "deny");
+  assert.match(JSON.parse(util.stdout).user_message, /read-only/i);
+  assert.ok(existsSync(join(tempProject, "util.js")));
 
   deactivateSession("conv-prompt");
 });

@@ -31,7 +31,7 @@ Any of the following activates Kodaelus for the current chat until opt-out (mode
 
 ### While active
 
-- **Main agent and subagent** must read and follow this file on **every substantive turn**.
+- **Main agent and subagent** must read and follow this file on **every substantive turn**, then **`.kodaelus/instructions.md`** when present (see **Project-Specific Guidelines**).
 - Apply the **Response Structure** and **Done Criteria** for the active mode.
 - **Prompt / Suggest / Question modes:** read-only — no mutating tools until upgrade to Main or Lite.
 - **Bug Investigation mode:** diagnostic writes allowed (logging, repro tests, `.kodaelus/bugs/`); do not ship the fix until Main upgrade.
@@ -48,9 +48,9 @@ User phrases such as **stop kodaelus**, **disable kodaelus**, **normal mode**, o
 |-------|----------------|
 | This policy + global `kodaelus-session` rule | Keeps Kodaelus behavior and mode across follow-up messages |
 | User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs, mode, scope metadata via `detectKodaelusMode` |
-| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **requires** trash backup + manifest for shell rm in Main/Lite |
-| User hook (`preToolUse` Delete) | **Hard-blocks** entry-point deletes; **requires** trash backup + manifest before Delete tool in Main/Lite (`guard-delete.mjs`, `failClosed`) |
-| User hook (`preToolUse` Write/StrReplace) | **Hard-blocks** edits past scope limit until user replies **`scope approved`** |
+| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **`block-readonly-shell`** / `extractPreferenceIntent`-adjacent `isReadOnlyMode` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file `>`/`>>` redirects, etc.); **requires** trash backup + manifest for shell rm in Main/Lite |
+| User hook (`preToolUse` Delete) | **Hard-blocks** entry-point deletes; denies whole-file deletes outside `.kodaelus/` when `isBugInvestigationMode`; **requires** trash backup + manifest before Delete tool in Main/Lite (`guard-delete.mjs`, `failClosed`) |
+| User hook (`preToolUse` Write/StrReplace/Delete/ApplyPatch) | **`isReadOnlyMode`** denies mutating tools in Prompt/Suggest/Question; **hard-blocks** edits past scope limit until user replies **`scope approved`** |
 | User hooks (`afterAgentResponse`, `stop`) | Parse Plan file estimates; flag bare `Confidence: NN%` without adjacent `Evidence:` |
 | User hook (`postToolUse` Delete, `sessionEnd`) | Verify deletion manifest + backup after deletes |
 
@@ -434,6 +434,63 @@ Beyond testing, ensure the project can **actually run**:
 - Surface any runtime blockers or warnings.
 - Mark completion only when both **tests pass** and **runtime checks succeed**.
 
+## Project-Specific Guidelines
+
+Per-project supplemental guidelines live at **`.kodaelus/instructions.md`** in the workspace root. They apply **in addition to** global policy when Kodaelus is active.
+
+### Read order
+
+Before **substantive technical work** (implementation, diagnostics, refactors, tests, runtime checks — not pure Q&A in Question mode):
+
+1. **Global** — `~/.cursor/kodaelus/instructions.md` (canonical policy).
+2. **Project** — `.kodaelus/instructions.md` when present (or after bootstrap below).
+
+Re-read both on substantive turns when Kodaelus is active, same as global policy.
+
+### Bootstrap
+
+On the **first substantive technical task** in a project when `.kodaelus/instructions.md` is missing:
+
+1. Create `.kodaelus/` under the project root if missing.
+2. Write `.kodaelus/instructions.md` from the project guidelines template (`install/templates/project-instructions.template.md` in the distribution repo; SDK: `ensureProjectGuidelines()`).
+3. When the project uses git (`.git` exists at root), ensure `.kodaelus/` is listed in `.gitignore` (add the entry if absent). Guidelines stay local — do not commit them unless the user explicitly chooses to.
+
+### Precedence
+
+Project guidelines **override** global policy on conflicts **except** these **safety-critical** areas — **global always wins**:
+
+| Area | Why non-overridable |
+|------|---------------------|
+| Git read-only (`status` / `diff` / `log` only) | Hook-enforced |
+| **File Deletion Protocol** (backup, manifest, entry-point block, ≥ 90% confidence) | Hook + irreversibility |
+| **Scope creep guardrail** (`scope approved`) | Hook-enforced |
+| Hook-enforced **confidence format** (`Confidence: NN% \| Evidence: …`) | Hook format check |
+| **Escalation Protocol** and **below 70% = Delivery Self-Check Fail** | Quality bar integrity |
+
+Project guidelines **may** override softer preferences: naming, preferred test commands, framework choices, comment style, delivery tier preference, docs locations, and similar non-safety rules.
+
+When a project guideline conflicts with a safety-critical global rule, follow global policy and note the conflict in the response.
+
+### Preference learning (3× rule)
+
+When the user asks for the **same non-safety guideline** approximately **three times** (same intent, possibly different wording):
+
+1. Track candidates in `.kodaelus/preference-log.json`:
+
+   ```json
+   { "candidates": [{ "key": "<normalized intent>", "count": 1, "lastSeen": "<ISO-8601>" }] }
+   ```
+
+2. Normalize keys loosely via `normalizePreferenceKey` / `extractPreferenceIntent` (shared hooks+SDK heuristic; e.g. "use vitest" and "run vitest" → same key).
+3. On the **third** occurrence, append one line under `## Preferences` in `.kodaelus/instructions.md`:
+
+   `YYYY-MM-DD | source: repeated request | <guideline>`
+
+4. Reset that candidate's count after append.
+5. **Mention the append** in the response when it happens.
+
+Manual edits to `.kodaelus/instructions.md` are welcome; do not overwrite user-written sections when appending preferences.
+
 ## Instruction Handling
 
 - When given a **list of instructions**, process them **sequentially** in order.
@@ -737,6 +794,7 @@ Do **not** use the full Main delivery structure or ship fixes. Use:
 - Flaky tests flagged **FLaky** with reruns recorded; Done not claimed on flaky gate.
 - **Rollback** noted when shared/critical paths changed.
 - Non-obvious quirks appended to `.kodaelus/insights.md` when discovered.
+- **Project-Specific Guidelines** read (and bootstrapped when missing) per `.kodaelus/instructions.md` policy; preference learning via `.kodaelus/preference-log.json` when applicable.
 - Facts and behavior claims are evidence-based; no unverified assertions presented as certain.
 - No violations of hard boundaries.
 - Explicit confirmation of completion.

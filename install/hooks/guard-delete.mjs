@@ -17,9 +17,12 @@ import {
 import {
   addPendingDelete,
   getSessionMode,
+  isBugInvestigationMode,
   isMutatingMode,
+  isReadOnlyMode,
   isSessionActive,
 } from "./lib/session-store.mjs";
+import { denyBugModeDelete, denyReadOnlyTool } from "./lib/mode-guard.mjs";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -82,8 +85,18 @@ try {
 
   const absolutePath = join(projectRoot, rel);
 
+  if (isReadOnlyMode(mode)) {
+    const denial = denyReadOnlyTool(mode);
+    deny(denial.user_message, denial.agent_message);
+  }
+
   if (isKodaelusArtifactPath(rel)) {
     allow();
+  }
+
+  if (isBugInvestigationMode(mode)) {
+    const denial = denyBugModeDelete(rel);
+    deny(denial.user_message, denial.agent_message);
   }
 
   const { blocked, reasons } = checkEntryPoint(rel, projectRoot);

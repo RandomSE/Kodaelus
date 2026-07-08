@@ -12,11 +12,13 @@ import {
   getScopeStatus,
   getSessionMode,
   isMutatingMode,
+  isReadOnlyMode,
   isScopeApprovePrompt,
   isSessionActive,
   recordTouchedFile,
   setPlanFileEstimate,
 } from "./lib/session-store.mjs";
+import { denyReadOnlyTool, isMutatingToolName } from "./lib/mode-guard.mjs";
 
 async function readInput() {
   const chunks = [];
@@ -130,6 +132,13 @@ try {
   }
 
   if (event === "preToolUse") {
+    const toolName = `${input.tool_name ?? input.toolName ?? ""}`;
+
+    if (isReadOnlyMode(mode) && isMutatingToolName(toolName)) {
+      process.stdout.write(`${JSON.stringify(denyReadOnlyTool(mode))}\n`);
+      process.exit(0);
+    }
+
     if (!isMutatingMode(mode)) {
       allowTool();
     }
