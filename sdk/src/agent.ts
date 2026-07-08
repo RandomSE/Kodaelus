@@ -1,6 +1,11 @@
 import path from "node:path";
 import { Agent, CursorAgentError, type RunResult } from "@cursor/sdk";
-import { loadInstructions, wrapTaskWithInstructions } from "./instructions.js";
+import {
+  loadInstructionsWithProjectGuidelines,
+  wrapTaskWithInstructions,
+} from "./instructions.js";
+import { detectKodaelusMode } from "./mode-detect.js";
+import { buildModeHeader, normalizeDetectedMode, runSdkPreflight } from "./runtime-guards.js";
 
 export type KodaelusRunOptions = {
   apiKey: string;
@@ -21,8 +26,20 @@ export async function runKodaelus(
   options: KodaelusRunOptions,
 ): Promise<KodaelusRunOutcome> {
   const projectCwd = path.resolve(options.cwd ?? process.cwd());
-  const instructions = await loadInstructions({ cwd: projectCwd });
-  const prompt = wrapTaskWithInstructions(instructions, options.task);
+  const mode = normalizeDetectedMode(detectKodaelusMode(options.task));
+  const preflight = runSdkPreflight({
+    mode,
+    task: options.task,
+    cwd: projectCwd,
+  });
+  for (const warning of preflight.warnings) {
+    console.error(`[kodaelus] preflight: ${warning}`);
+  }
+  const instructions = await loadInstructionsWithProjectGuidelines({
+    cwd: projectCwd,
+  });
+  const policy = `${buildModeHeader(mode)}\n\n${instructions}`;
+  const prompt = wrapTaskWithInstructions(policy, options.task);
   const modelId = options.modelId ?? "composer-2.5";
 
   await using agent = await Agent.create({

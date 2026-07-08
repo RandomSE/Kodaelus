@@ -6,6 +6,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { manifestHasEntry } from "./lib/deletion-guard.mjs";
+import { ensureProjectGuidelines } from "./lib/project-guidelines.mjs";
+import {
+  extractPreferenceIntent,
+  recordPreferenceCandidate,
+} from "./lib/preference-learning.mjs";
+import { tryRestoreFromPrompt } from "./lib/restore-handler.mjs";
 import {
   activateSession,
   approveScope,
@@ -17,6 +23,7 @@ import {
   isActivatePrompt,
   isDeactivatePrompt,
   isScopeApprovePrompt,
+  isSessionActive,
 } from "./lib/session-store.mjs";
 
 async function readInput() {
@@ -68,6 +75,7 @@ try {
     const subagentType = `${input.subagent_type ?? ""}`.toLowerCase();
     if (subagentType.includes("kodaelus")) {
       activateSession(conversationId, "main");
+      ensureProjectGuidelines(projectRoot);
     }
     allow();
   }
@@ -82,6 +90,23 @@ try {
       const mode = detectKodaelusMode(prompt) ?? "main";
       const suggestSubMode = detectSuggestSubMode(prompt);
       activateSession(conversationId, mode, suggestSubMode);
+      ensureProjectGuidelines(projectRoot);
+    }
+
+    if (isSessionActive(conversationId)) {
+      ensureProjectGuidelines(projectRoot);
+      tryRestoreFromPrompt(projectRoot, prompt);
+
+      const explicitPreference = process.env.KODAELUS_RECORD_PREFERENCE?.trim();
+      const preferenceIntent = explicitPreference || extractPreferenceIntent(prompt);
+      if (preferenceIntent) {
+        const result = recordPreferenceCandidate(projectRoot, preferenceIntent);
+        if (result.appended && result.guidelineLine) {
+          console.error(
+            `Kodaelus: appended preference to .kodaelus/instructions.md — ${result.guidelineLine}`,
+          );
+        }
+      }
     }
   }
 } catch {

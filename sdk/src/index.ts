@@ -7,9 +7,26 @@ export {
   wrapTaskWithInstructions,
   globalInstructionsPath,
   projectInstructionsPath,
+  projectGuidelinesPath,
+  loadProjectGuidelines,
+  loadInstructionsWithProjectGuidelines,
+  ensureProjectGuidelines,
+  recordPreferenceCandidate,
+  normalizePreferenceKey,
+  extractPreferenceIntent,
   resolveDistributionRepoRoot,
+  PROJECT_GUIDELINES_REL,
+  KODAELUS_DIR_REL,
+  PREFERENCE_LOG_REL,
+  PREFERENCE_THRESHOLD,
 } from "./instructions.js";
-export type { ResolveInstructionsOptions } from "./instructions.js";
+export type {
+  ResolveInstructionsOptions,
+  ProjectGuidelinesOptions,
+  EnsureProjectGuidelinesResult,
+  PreferenceLog,
+  RecordPreferenceResult,
+} from "./instructions.js";
 
 export {
   DELETION_MANIFEST_REL,
@@ -28,3 +45,23 @@ export {
   extractSuggestionKeys,
   SUGGESTIONS_DIR_REL,
 } from "./suggestions.js";
+
+export {
+  buildModeHeader,
+  describeSdkLimitations,
+  normalizeDetectedMode,
+  runSdkPreflight,
+} from "./runtime-guards.js";
+export type {
+  KodaelusModeName,
+  SdkPreflightOptions,
+  SdkPreflightResult,
+} from "./runtime-guards.js";
+
+export {
+  detectKodaelusMode,
+  isBugInvestigationMode,
+  isDeactivatePrompt,
+  isMutatingMode,
+  isReadOnlyMode,
+} from "./mode-detect.js";

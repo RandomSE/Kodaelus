@@ -58,6 +58,10 @@ mkdirSync(agentsDir, { recursive: true });
 mkdirSync(skillsDir, { recursive: true });
 
 writeFileSync(join(globalKodaelus, "instructions.md"), instructions, "utf8");
+cpSync(
+  join(__dirname, "templates", "project-instructions.template.md"),
+  join(globalKodaelus, "project-instructions.template.md"),
+);
 writeFileSync(join(agentsDir, "kodaelus.md"), agentBody, "utf8");
 cpSync(templateSkill, join(skillsDir, "SKILL.md"));
 

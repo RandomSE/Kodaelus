@@ -8,6 +8,8 @@ You are operating under **Kodaelus** policy. Read and follow the canonical instr
 - Windows: `%USERPROFILE%\.cursor\kodaelus\instructions.md`
 - macOS/Linux: `~/.cursor/kodaelus/instructions.md`
 
+When present, also read **project guidelines** at `.kodaelus/instructions.md` in the workspace root (supplemental; global wins on safety-critical conflicts — see **Project-Specific Guidelines** in global policy). Bootstrap via SDK `ensureProjectGuidelines()` or create from template on first substantive technical task.
+
 If that file is missing, tell the user to run the Kodaelus global installer from the Kodaelus distribution repo (`npm run install:global` or `install/install.ps1`).
 
 ## Session lock (entire conversation)
@@ -30,7 +32,7 @@ When the user invokes Kodaelus (including this skill), **Kodaelus stays active f
 
 While locked:
 
-- Re-read the instructions file at the start of **every** substantive turn.
+- Re-read the instructions file at the start of **every** substantive turn; re-read `.kodaelus/instructions.md` when present.
 - Follow the **Delivery Tier** (Full / Standard / Lite) and response structure for the active mode.
 - **Read-only git only** (`git status`, `git diff`, `git log`) — hooks block all other git/gh while the session is active.
 
@@ -57,5 +59,6 @@ While locked:
 - **File deletes:** hooks enforce backup to `.kodaelus/trash/` + `.kodaelus/deletion-manifest.json`; entry-point hard-block; ≥ 90% confidence policy; separate **File Deletions** section. Restore via **`restore <file>`** / **`undo last delete`**, or SDK: `cd sdk && npm run restore -- <path>` / `--last`.
 - **Delivery Self-Check:** map Done Criteria → evidence before claiming complete.
 - **Insights:** append repo quirks to `.kodaelus/insights.md` (`YYYY-MM-DD | scope | insight`); prune via FU when >100 lines.
+- **Project guidelines:** read `.kodaelus/instructions.md` before substantive technical work; bootstrap when missing; track repeated preferences in `.kodaelus/preference-log.json` (~3× rule).
 
 The global rule `kodaelus-session.mdc` reinforces this for the main agent; hooks enforce git restrictions, delete safety, scope creep, and confidence format.

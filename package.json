@@ -12,8 +12,8 @@
   "scripts": {
     "install:global": "node install/install.mjs",
     "uninstall:global": "node install/install.mjs --uninstall",
-    "test:hooks": "node --test install/hooks/lib/*.test.mjs install/hooks/*.integration.test.mjs",
-    "test:install": "node --test install/lib/*.test.mjs",
+    "test:hooks": "node scripts/run-node-tests.mjs install/hooks",
+    "test:install": "node scripts/run-node-tests.mjs install/lib",
     "test": "npm run test:hooks && npm run test:install"
   },
   "engines": {

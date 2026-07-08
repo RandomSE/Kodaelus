@@ -25,7 +25,7 @@ When **any** of these happened in this conversation, Kodaelus is **active until 
 
 While active:
 
-1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent).
+1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent), then **`.kodaelus/instructions.md`** when present (see **Project-Specific Guidelines** in global policy).
 2. Apply the Kodaelus **response structure** and **done criteria** for the active mode from that file.
 3. **Git is restricted** — only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
 4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".

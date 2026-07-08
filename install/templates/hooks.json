@@ -67,6 +67,9 @@
         "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow)\\b"
       },
       {
+        "command": "node ./hooks/block-readonly-shell.mjs"
+      },
+      {
         "command": "node ./hooks/block-delete-shell.mjs",
         "matcher": "\\brm\\b|\\brmdir\\b|\\bdel\\b|\\brd\\b|Remove-Item|\\bunlink\\b",
         "failClosed": true

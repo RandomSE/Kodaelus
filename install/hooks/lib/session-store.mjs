@@ -31,16 +31,27 @@ import { dirname, join } from "node:path";
  * @property {SuggestSubMode | null} suggestSubMode
  */
 
-const DEACTIVATE =
-  /\b(stop|disable|exit|end|leave)\s+kodaelus\b|\bnormal\s+mode\b|\bwithout\s+kodaelus\b/i;
+import {
+  detectKodaelusMode,
+  isBugInvestigationMode,
+  isDeactivatePrompt,
+  isMutatingMode,
+  isReadOnlyMode,
+} from "./kodaelus-mode.mjs";
+
+export {
+  detectKodaelusMode,
+  isBugInvestigationMode,
+  isDeactivatePrompt,
+  isMutatingMode,
+  isReadOnlyMode,
+} from "./kodaelus-mode.mjs";
 
 const SCOPE_APPROVE = /\b(scope approved|proceed with scope|approve scope)\b/i;
 
 const LOCK_STALE_MS = 30_000;
-const LOCK_MAX_WAIT_MS = 5_000;
+const LOCK_MAX_WAIT_MS = Number(process.env.KODAELUS_STORE_LOCK_MAX_WAIT_MS) || 5_000;
 const LOCK_POLL_MS = 10;
-
-const MUTATING_MODES = new Set(["main", "lite"]);
 
 /** @returns {SessionMetadata} */
 function emptyMetadata() {
@@ -166,27 +177,38 @@ function readStoreUnlocked() {
   if (!existsSync(storePath)) {
     return { conversationIds: [], modes: {}, metadata: {} };
   }
-  try {
-    const parsed = JSON.parse(readFileSync(storePath, "utf8"));
-    const ids = Array.isArray(parsed?.conversationIds)
-      ? parsed.conversationIds.filter((id) => typeof id === "string" && id.length > 0)
-      : [];
-    const conversationIds = [...new Set(ids)];
-    /** @type {Record<string, KodaelusMode>} */
-    const modes = {};
-    /** @type {Record<string, SessionMetadata>} */
-    const metadata = {};
 
-    for (const id of conversationIds) {
-      const mode = parsed?.modes?.[id];
-      modes[id] = normalizeMode(mode);
-      metadata[id] = normalizeMetadata(parsed?.metadata?.[id]);
+  const maxAttempts = 8;
+  let lastError;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const parsed = JSON.parse(readFileSync(storePath, "utf8"));
+      const ids = Array.isArray(parsed?.conversationIds)
+        ? parsed.conversationIds.filter((id) => typeof id === "string" && id.length > 0)
+        : [];
+      const conversationIds = [...new Set(ids)];
+      /** @type {Record<string, KodaelusMode>} */
+      const modes = {};
+      /** @type {Record<string, SessionMetadata>} */
+      const metadata = {};
+
+      for (const id of conversationIds) {
+        const mode = parsed?.modes?.[id];
+        modes[id] = normalizeMode(mode);
+        metadata[id] = normalizeMetadata(parsed?.metadata?.[id]);
+      }
+
+      return { conversationIds, modes, metadata };
+    } catch (err) {
+      lastError = err;
+      sleepSync(LOCK_POLL_MS);
     }
-
-    return { conversationIds, modes, metadata };
-  } catch {
-    return { conversationIds: [], modes: {}, metadata: {} };
   }
+
+  throw new Error(
+    `session-store: failed to read ${storePath} after ${maxAttempts} attempts: ${lastError?.message ?? "unknown error"}`,
+  );
 }
 
 /**
@@ -246,91 +268,12 @@ export function detectSuggestSubMode(prompt) {
   return null;
 }
 
-/**
- * @param {string} prompt
- * @returns {KodaelusMode | null}
- */
-export function detectKodaelusMode(prompt) {
-  if (typeof prompt !== "string" || !prompt.trim()) return null;
-  const text = prompt.trim();
-
-  if (isDeactivatePrompt(text)) return null;
-
-  if (/\bbugfix\b/i.test(text) || /\bbug[-\s]fix\b/i.test(text)) {
-    return "main";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(2|b|bug)\b/i.test(text) ||
-    /\bkodaelus\s+(2|bug\s+mode)\b/i.test(text) ||
-    /\bkodaelus\s+b\b/i.test(text)
-  ) {
-    return "bug";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+suggest\b/i.test(text) ||
-    /\bkodaelus\s+suggest\s+mode\b/i.test(text) ||
-    /\buse\s+kodaelus\s+3\b/i.test(text)
-  ) {
-    return "suggest";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(q|question)\b/i.test(text) ||
-    /\bkodaelus\s+question\s+mode\b/i.test(text) ||
-    /\buse\s+kodaelus\s+5\b/i.test(text)
-  ) {
-    return "question";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(lite|fast)\b/i.test(text) ||
-    /\bkodaelus\s+lite\s+mode\b/i.test(text) ||
-    /\buse\s+kodaelus\s+4\b/i.test(text)
-  ) {
-    return "lite";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(1|p|prompt)\b/i.test(text) ||
-    /\bkodaelus\s+(1|planner|prompt\s+mode)\b/i.test(text)
-  ) {
-    return "prompt";
-  }
-
-  if (/\b(run it|execute)\b/i.test(text)) {
-    return "main";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus(?:\s+(0|main))?\b/i.test(text) ||
-    /\bkodaelus\s+mode\b/i.test(text)
-  ) {
-    return "main";
-  }
-
-  return null;
-}
-
 export function isActivatePrompt(prompt) {
   return detectKodaelusMode(prompt) !== null;
 }
 
-export function isDeactivatePrompt(prompt) {
-  return typeof prompt === "string" && DEACTIVATE.test(prompt);
-}
-
 export function isScopeApprovePrompt(prompt) {
   return typeof prompt === "string" && SCOPE_APPROVE.test(prompt);
-}
-
-/**
- * @param {KodaelusMode | null | undefined} mode
- * @returns {boolean}
- */
-export function isMutatingMode(mode) {
-  return mode != null && MUTATING_MODES.has(mode);
 }
 
 export function isSessionActive(conversationId) {

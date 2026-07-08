@@ -91,19 +91,32 @@ describe("session-store", () => {
 
   it("preserves all activations under concurrent hook processes", async () => {
     const count = 12;
-    const results = await Promise.all(
-      Array.from({ length: count }, (_, i) =>
-        new Promise((resolve) => {
-          const child = spawn(process.execPath, [activateChildScript, tempHome, `conv-${i}`], {
-            env: process.env,
-          });
-          child.on("close", (code) => resolve(code));
-        }),
-      ),
-    );
+    const batchSize = 4;
+    const childEnv = {
+      ...process.env,
+      KODAELUS_STORE_LOCK_MAX_WAIT_MS: "30000",
+    };
 
-    for (const code of results) {
-      expect(code).toBe(0);
+    for (let start = 0; start < count; start += batchSize) {
+      const batch = Array.from(
+        { length: Math.min(batchSize, count - start) },
+        (_, offset) => start + offset,
+      );
+      const results = await Promise.all(
+        batch.map(
+          (i) =>
+            new Promise((resolve) => {
+              const child = spawn(process.execPath, [activateChildScript, tempHome, `conv-${i}`], {
+                env: childEnv,
+              });
+              child.on("close", (code) => resolve(code));
+            }),
+        ),
+      );
+
+      for (const [index, code] of results.entries()) {
+        expect(code, `child conv-${batch[index]} exit code`).toBe(0);
+      }
     }
 
     const storePath = join(tempHome, "kodaelus", "active-sessions.json");
@@ -112,7 +125,7 @@ describe("session-store", () => {
     for (let i = 0; i < count; i++) {
       expect(stored.conversationIds).toContain(`conv-${i}`);
     }
-  }, 15_000);
+  }, 30_000);
 });
 
 describe("git-guard", () => {

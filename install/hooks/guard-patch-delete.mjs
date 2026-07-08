@@ -16,9 +16,12 @@ import { extractPatchDeletePaths, extractPatchText } from "./lib/patch-guard.mjs
 import {
   addPendingDelete,
   getSessionMode,
+  isBugInvestigationMode,
   isMutatingMode,
+  isReadOnlyMode,
   isSessionActive,
 } from "./lib/session-store.mjs";
+import { denyBugModeDelete, denyReadOnlyTool } from "./lib/mode-guard.mjs";
 
 async function readInput() {
   const chunks = [];
@@ -63,8 +66,10 @@ try {
   }
 
   const mode = getSessionMode(conversationId) ?? "main";
-  if (!isMutatingMode(mode)) {
-    allow();
+
+  if (isReadOnlyMode(mode)) {
+    const denial = denyReadOnlyTool(mode);
+    deny(denial.user_message, denial.agent_message);
   }
 
   const patch = extractPatchText(input);
@@ -91,6 +96,11 @@ try {
       continue;
     }
 
+    if (isBugInvestigationMode(mode) && !isKodaelusArtifactPath(rel)) {
+      const denial = denyBugModeDelete(rel);
+      deny(denial.user_message, denial.agent_message);
+    }
+
     const absolutePath = join(projectRoot, rel);
     const { blocked, reasons } = checkEntryPoint(rel, projectRoot);
     if (blocked) {
@@ -114,6 +124,10 @@ try {
     }
 
     if (!existsSync(absolutePath)) {
+      continue;
+    }
+
+    if (!isMutatingMode(mode)) {
       continue;
     }
 
