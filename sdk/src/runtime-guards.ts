@@ -15,7 +15,8 @@ export type KodaelusModeName =
   | "bug"
   | "suggest"
   | "lite"
-  | "question";
+  | "question"
+  | "prepare";
 
 const READ_ONLY_MODES = new Set<KodaelusModeName>([
   "prompt",
@@ -37,7 +38,7 @@ export function buildModeHeader(mode: KodaelusModeName): string {
   if (READ_ONLY_MODES.has(mode)) {
     lines.push(
       "",
-      "This task is read-only in SDK policy terms — do not mutate project files. " +
+      "This task is read-only in SDK policy terms - do not mutate project files. " +
         "Upgrade phrasing for a full implementation run: `use kodaelus main` or `use kodaelus lite`.",
     );
   }
@@ -45,7 +46,15 @@ export function buildModeHeader(mode: KodaelusModeName): string {
   if (mode === "bug") {
     lines.push(
       "",
-      "Bug Investigation mode — maximize visibility and diagnostics under `.kodaelus/bugs/`; do not ship the fix.",
+      "Bug Investigation mode - maximize visibility and diagnostics under `.kodaelus/bugs/`; do not ship the fix.",
+    );
+  }
+
+  if (mode === "prepare") {
+    lines.push(
+      "",
+      "Prepare mode - review changes since HEAD, run the full test suite (fix+rerun max 3 cycles), " +
+        "then propose a commit message. Git stays read-only; do not run git commit/add/gh.",
     );
   }
 
@@ -61,7 +70,8 @@ export function normalizeDetectedMode(
     mode === "bug" ||
     mode === "suggest" ||
     mode === "lite" ||
-    mode === "question"
+    mode === "question" ||
+    mode === "prepare"
   ) {
     return mode;
   }
@@ -73,14 +83,20 @@ export function runSdkPreflight(options: SdkPreflightOptions): SdkPreflightResul
 
   if (READ_ONLY_MODES.has(options.mode)) {
     warnings.push(
-      `Read-only mode (${options.mode}) detected — the SDK cannot enforce tool or shell blocks. ` +
+      `Read-only mode (${options.mode}) detected - the SDK cannot enforce tool or shell blocks. ` +
         "Use Cursor IDE with Kodaelus active for hard read-only guards.",
     );
   }
 
   if (options.mode === "bug") {
     warnings.push(
-      "Bug Investigation mode — policy expects diagnostics under .kodaelus/bugs/; do not ship fixes until main upgrade.",
+      "Bug Investigation mode - policy expects diagnostics under .kodaelus/bugs/; do not ship fixes until main upgrade.",
+    );
+  }
+
+  if (options.mode === "prepare") {
+    warnings.push(
+      "Prepare mode - full suite + commit message proposal only; SDK cannot enforce git read-only. Use Cursor IDE for hard git guards.",
     );
   }
 

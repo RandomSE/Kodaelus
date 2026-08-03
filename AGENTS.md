@@ -11,7 +11,7 @@ npm run install:global
 ## Use in any repo
 
 - Pick subagent **kodaelus**, or ask to use Kodaelus.
-- Modes: Main (0), Prompt (1), Bug Investigation (2), Suggest (3), Lite (4), Question (5).
+- Modes: Main (0), Prompt (1), Bug Investigation (2), Suggest (3), Lite (4), Question (5), Prepare (6).
 - No `AGENTS.md` or `.cursor/rules` from this project needed.
 
 ## Policy source

@@ -11,7 +11,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** @typedef {'main' | 'prompt' | 'bug' | 'suggest' | 'lite' | 'question'} KodaelusMode */
+/** @typedef {'main' | 'prompt' | 'bug' | 'suggest' | 'lite' | 'question' | 'prepare'} KodaelusMode */
 /** @typedef {'issues' | 'features'} SuggestSubMode */
 
 /**
@@ -126,7 +126,8 @@ function normalizeMode(value) {
     value === "bug" ||
     value === "suggest" ||
     value === "lite" ||
-    value === "question"
+    value === "question" ||
+    value === "prepare"
   ) {
     return value;
   }

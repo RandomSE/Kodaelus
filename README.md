@@ -72,6 +72,7 @@ Supplemental guidelines for this repository. Read together with global Kodaelus 
 | **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Proactive audit or roadmap scan (read-only) |
 | **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only |
 | **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep research Q&A (read-only) |
+| **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commits) |
 | **Upgrade** | `run it`, `execute`, `use kodaelus main` | Switch to Main; consume dossier/prompt |
 
 **Mode Lite (4)** is an activation phrase for fast edits. **Delivery Tier Lite** is a shorter section set within a mode — they are different concepts.
@@ -91,8 +92,17 @@ Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scann
 | **Delete tool / shell rm** | Entry points hard-blocked; other deletes require automatic backup to `.kodaelus/trash/` + manifest |
 | **Scope creep** | Blocks edits past `max(10, 2× Plan file estimate)` until you reply **`scope approved`** |
 | **Confidence format** | Flags bare `Confidence: NN%` without adjacent `Evidence:` on substantive deliveries |
+| **AskQuestion guard** | In Main/Lite/Bug/Prepare, denies `AskQuestion`/`AskUserQuestion` **when Cursor fires `preToolUse` for those tools**; `stop` follow-up if open clarification prose is detected. Policy + Prompt ambiguity pre-emption remain primary |
 | **Project guidelines** | Bootstrapped on activation; `restore <file>` / `undo last delete` phrases restore from manifest |
 | **Preferences** | ~3× repeated requests append to `.kodaelus/instructions.md` via hook |
+
+**AskQuestion platform gap (2026):** Cursor IDE/CLI often omit `AskQuestion` / `AskUserQuestion` from the `preToolUse` / `postToolUse` pipeline (confirmed in Cursor forum reports). Kodaelus therefore:
+
+1. Relies on policy (**Cursor clarifying questions** resolution priority) and Prompt-mode **ambiguity pre-emption** to avoid mid-run pauses.
+2. Ships `ask-question-guard.mjs` as defense-in-depth so deny/heuristic path works when Cursor wires the tool into hooks.
+3. Keeps the ask-question-guard `preToolUse` entry **fail-open** (`failClosed` omitted / not true) until Cursor confirms AskQuestion hook events. When confirmed, set `ASK_QUESTION_HOOK_FAIL_CLOSED_READY` to `true` in `install/hooks/lib/ask-question-guard.mjs` and add `"failClosed": true` on that hooks.json entry, then re-run `npm run install:global`.
+
+**Mode sticky paste tip:** Put the activation phrase on the **first line** (`use kodaelus main`). Mode detection prefers the leading preamble so body text that mentions `use kodaelus 1` / `kodaelus prompt mode` cannot pin the session in Prompt mode.
 
 ### SDK vs IDE
 
@@ -110,7 +120,7 @@ Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scann
 
 The SDK is for **programmatic runs with policy preloaded**, not a full replacement for IDE hooks. Use Cursor with Kodaelus active when you need hard safety guards.
 
-**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks (needed for `block-readonly-shell` and other new hooks). Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent — it should be denied — then **`stop kodaelus`**.
+**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks (needed for `block-readonly-shell`, `ask-question-guard`, and other new hooks). Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent — it should be denied — then **`stop kodaelus`**. If a long `use kodaelus main` paste stays read-only, confirm the activation line is first, then re-run install:global.
 
 ### Architecture Improvement Review
 

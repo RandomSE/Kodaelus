@@ -10,6 +10,8 @@ const samples = [
   "use kodaelus suggest issues",
   "use kodaelus lite",
   "use kodaelus question",
+  "use kodaelus prepare",
+  "use kodaelus 6",
   "stop kodaelus",
   "please fix the login bug",
 ];

@@ -69,9 +69,16 @@ export const HARDENED_POLICY_KEYWORDS = [
   "Mode Lite (4) vs Delivery Tier Lite",
   "### Question mode (5)",
   "use kodaelus question",
+  "### Prepare mode (6)",
+  "use kodaelus prepare",
   "guard-delete.mjs",
   "Hook enforcement",
   "confidence-evidence-guard.mjs",
+  "Cursor clarifying questions",
+  "minimal scope",
+  "ambiguity pre-emption",
+  "resolution priority",
+  "ask-question-guard.mjs",
 ];
 
 /**
