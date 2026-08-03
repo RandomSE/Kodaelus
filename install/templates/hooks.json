@@ -35,6 +35,14 @@
         "command": "node ./hooks/guard-delete.mjs",
         "matcher": "Delete",
         "failClosed": true
+      },
+      {
+        "command": "node ./hooks/dash-guard.mjs",
+        "matcher": "Write|StrReplace|ApplyPatch"
+      },
+      {
+        "command": "node ./hooks/ask-question-guard.mjs",
+        "matcher": "AskQuestion|AskUserQuestion"
       }
     ],
     "postToolUse": [
@@ -50,6 +58,12 @@
       {
         "command": "node ./hooks/confidence-evidence-guard.mjs",
         "failClosed": true
+      },
+      {
+        "command": "node ./hooks/dash-guard.mjs"
+      },
+      {
+        "command": "node ./hooks/ask-question-guard.mjs"
       }
     ],
     "stop": [
@@ -59,6 +73,15 @@
       {
         "command": "node ./hooks/confidence-evidence-guard.mjs",
         "failClosed": true
+      },
+      {
+        "command": "node ./hooks/dash-guard.mjs",
+        "failClosed": true,
+        "loop_limit": 3
+      },
+      {
+        "command": "node ./hooks/ask-question-guard.mjs",
+        "loop_limit": 2
       }
     ],
     "beforeShellExecution": [

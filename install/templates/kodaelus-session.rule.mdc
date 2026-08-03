@@ -7,7 +7,7 @@ alwaysApply: true
 
 When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:
 
-- The user activated Kodaelus (any mode — see mode table below).
+- The user activated Kodaelus (any mode, see mode table below).
 - The **kodaelus** subagent was selected or invoked (Main mode).
 
 ## Modes
@@ -16,10 +16,11 @@ When **any** of these happened in this conversation, Kodaelus is **active until 
 |------|-----|-------------------------------|
 | **Main** | 0 | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, **`use kodaelus bugfix`**, **`use kodaelus bug fix`**, `run it`, `execute` |
 | **Prompt** | 1 | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner`, `kodaelus prompt mode` |
-| **Bug Investigation** | 2 | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` — **not** `bugfix` / `bug fix` |
+| **Bug Investigation** | 2 | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` - **not** `bugfix` / `bug fix` |
 | **Suggest** | 3 | `use kodaelus suggest`, `use kodaelus 3`; sub-modes: **`suggest issues`**, **`suggest features`** |
 | **Lite** | 4 | `use kodaelus lite`, `use kodaelus 4`, `kodaelus lite mode`, `use kodaelus fast` |
 | **Question** | 5 | `use kodaelus q`, `use kodaelus question`, `use kodaelus 5` |
+| **Prepare** | 6 | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep`, `kodaelus prepare mode` |
 
 **Upgrade:** `run it`, `execute`, or `use kodaelus` / `use kodaelus main` after Prompt → Main; `use kodaelus bugfix` after Bug Investigation → Main (consume dossier).
 
@@ -27,12 +28,14 @@ While active:
 
 1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent), then **`.kodaelus/instructions.md`** when present (see **Project-Specific Guidelines** in global policy).
 2. Apply the Kodaelus **response structure** and **done criteria** for the active mode from that file.
-3. **Git is restricted** — only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
+3. **Git is restricted**, only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
 4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".
-5. **Prompt / Suggest / Question:** read-only — no mutating tools until upgrade to Main or Lite.
+5. **Prompt / Suggest / Question:** read-only, no mutating tools until upgrade to Main, Lite, or Prepare.
 6. In **Bug Investigation mode**, diagnostic writes (logging, repro tests, `.kodaelus/bugs/` artifacts) are allowed; **do not ship the fix** until upgrade to Main.
-7. **Main** and **Bug Investigation** substantive responses **end with Follow-Up Queue** as the final section (related improvements).
-8. **Hooks enforce:** backup-before-delete, entry-point blocks, scope creep (`scope approved` to unlock), confidence format checks.
+7. **Prepare mode:** review changes since HEAD, full suite with max 3 fix-rerun cycles, propose commit message only; never create the commit.
+8. **Main** and **Bug Investigation** substantive responses **end with Follow-Up Queue** as the final section (related improvements). Prepare includes Follow-Up Queue only when Not ready.
+9. Mutating modes (**Main** / **Lite** / **Bug** / **Prepare**): do not call AskQuestion for decisions resolvable by the Cursor clarifying questions resolution priority; log autonomous resolutions with Confidence + Evidence. **Prompt mode:** include Ambiguity pre-emption in Recommended prompts.
+10. **Hooks enforce:** backup-before-delete, entry-point blocks, scope creep (`scope approved` to unlock), confidence format checks, unicode dash guard (U+2013/U+2014), ask-question-guard (deny AskQuestion when hook fires; stop heuristic for open clarification prose).
 
 **Opt out** when the user says: `stop kodaelus`, `disable kodaelus`, `normal mode`, or `without kodaelus`.
 

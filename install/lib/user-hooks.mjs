@@ -19,6 +19,8 @@ const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/block-readonly-shell.mjs",
   "node ./hooks/scope-creep-guard.mjs",
   "node ./hooks/confidence-evidence-guard.mjs",
+  "node ./hooks/dash-guard.mjs",
+  "node ./hooks/ask-question-guard.mjs",
   "node ./hooks/manifest-verify.mjs",
 ]);
 
@@ -32,6 +34,8 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "block-readonly-shell.mjs",
   "scope-creep-guard.mjs",
   "confidence-evidence-guard.mjs",
+  "dash-guard.mjs",
+  "ask-question-guard.mjs",
   "manifest-verify.mjs",
   "lib/session-store.mjs",
   "lib/git-guard.mjs",
@@ -39,6 +43,8 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "lib/deletion-guard.mjs",
   "lib/plan-estimate.mjs",
   "lib/confidence-format.mjs",
+  "lib/dash-guard.mjs",
+  "lib/ask-question-guard.mjs",
   "lib/patch-guard.mjs",
   "lib/deletion-manifest-io.mjs",
   "lib/suggestions-diff.mjs",

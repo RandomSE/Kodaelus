@@ -8,7 +8,7 @@ You are operating under **Kodaelus** policy. Read and follow the canonical instr
 - Windows: `%USERPROFILE%\.cursor\kodaelus\instructions.md`
 - macOS/Linux: `~/.cursor/kodaelus/instructions.md`
 
-When present, also read **project guidelines** at `.kodaelus/instructions.md` in the workspace root (supplemental; global wins on safety-critical conflicts — see **Project-Specific Guidelines** in global policy). Bootstrap via SDK `ensureProjectGuidelines()` or create from template on first substantive technical task.
+When present, also read **project guidelines** at `.kodaelus/instructions.md` in the workspace root (supplemental; global wins on safety-critical conflicts, see **Project-Specific Guidelines** in global policy). Bootstrap via SDK `ensureProjectGuidelines()` or create from template on first substantive technical task.
 
 If that file is missing, tell the user to run the Kodaelus global installer from the Kodaelus distribution repo (`npm run install:global` or `install/install.ps1`).
 
@@ -20,12 +20,13 @@ When the user invokes Kodaelus (including this skill), **Kodaelus stays active f
 
 | Mode | Activation | Behavior |
 |------|------------|----------|
-| **Main (0)** | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, subagent | Full TDD, tiered response structure, **Delivery Self-Check**, **Follow-Up Queue** |
-| **Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only; **Recommended Kodaelus Prompt** only |
-| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier at `.kodaelus/bugs/` — **not** the fix |
+| **Main (0)** | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, subagent | Full TDD, tiered response structure, **Delivery Self-Check**, **Follow-Up Queue**; autonomous clarifying-question resolution; avoid AskQuestion when resolvable |
+| **Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only; **Recommended Kodaelus Prompt** only; **Ambiguity pre-emption** required before emission |
+| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier at `.kodaelus/bugs/` - **not** the fix; autonomous clarifying-question resolution |
 | **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Read-only proactive scan; persists to `.kodaelus/suggestions/` |
-| **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only (not full suite) |
+| **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only (not full suite); autonomous clarifying-question resolution |
 | **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep read-only Q&A with evidence |
+| **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commit) |
 | **Upgrade** | `use kodaelus main` after Prompt/Bug Investigation | Switch to Main; consume prompt or dossier |
 
 **Note:** `bugfix` / `bug fix` → **Main**, not Bug Investigation. **Mode Lite (4)** ≠ **Delivery Tier Lite**.
@@ -34,12 +35,15 @@ While locked:
 
 - Re-read the instructions file at the start of **every** substantive turn; re-read `.kodaelus/instructions.md` when present.
 - Follow the **Delivery Tier** (Full / Standard / Lite) and response structure for the active mode.
-- **Read-only git only** (`git status`, `git diff`, `git log`) — hooks block all other git/gh while the session is active.
+- **Read-only git only** (`git status`, `git diff`, `git log`), hooks block all other git/gh while the session is active.
+- **Main / Lite / Bug / Prepare:** resolve clarifying questions via Cursor clarifying questions resolution priority; avoid AskQuestion when resolvable; log Confidence + Evidence.
+- **Prompt:** run ambiguity pre-emption before emitting the Recommended Kodaelus Prompt.
+- **Prepare:** review changes since HEAD; full suite; propose commit message only when Ready.
 
 ### Follow-ups and reviews
 
-- After substantive deliveries, **Main** and **Bug Investigation** modes **must end** with **Follow-Up Queue** (`FU-1`, …) — related improvements as the final section. User may say **implement suggestions** to execute queued items.
-- On improvement/review requests (no implementation), produce **Architecture Improvement Review** with rated (1–5) decision points.
+- After substantive deliveries, **Main** and **Bug Investigation** modes **must end** with **Follow-Up Queue** (`FU-1`, …), related improvements as the final section. User may say **implement suggestions** to execute queued items.
+- On improvement/review requests (no implementation), produce **Architecture Improvement Review** with rated (1 - 5) decision points.
 
 ### Task-type workflows and deletion safety
 

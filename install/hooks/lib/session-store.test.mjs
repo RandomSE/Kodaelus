@@ -13,6 +13,7 @@ import {
   isActivatePrompt,
   isDeactivatePrompt,
   isMutatingMode,
+  isReadOnlyMode,
   isSessionActive,
   recordTouchedFile,
   setSessionMode,
@@ -74,7 +75,7 @@ test("detectKodaelusMode: deactivate phrases → null", () => {
   assert.equal(detectKodaelusMode("normal mode"), null);
 });
 
-test("detectKodaelusMode: suggest, lite, and question modes", () => {
+test("detectKodaelusMode: suggest, lite, question, and prepare modes", () => {
   assert.equal(detectKodaelusMode("use kodaelus suggest"), "suggest");
   assert.equal(detectKodaelusMode("use kodaelus 3"), "suggest");
   assert.equal(detectKodaelusMode("use kodaelus lite"), "lite");
@@ -82,6 +83,49 @@ test("detectKodaelusMode: suggest, lite, and question modes", () => {
   assert.equal(detectKodaelusMode("use kodaelus fast"), "lite");
   assert.equal(detectKodaelusMode("use kodaelus q"), "question");
   assert.equal(detectKodaelusMode("use kodaelus 5"), "question");
+  assert.equal(detectKodaelusMode("use kodaelus prepare"), "prepare");
+  assert.equal(detectKodaelusMode("use kodaelus 6"), "prepare");
+  assert.equal(detectKodaelusMode("use kodaelus prep"), "prepare");
+  assert.equal(detectKodaelusMode("kodaelus prepare mode"), "prepare");
+});
+
+test("detectKodaelusMode: leading prepare beats body prompt mentions", () => {
+  const paste = [
+    "use kodaelus prepare",
+    "",
+    "# Review",
+    "Prior draft used use kodaelus 1 and kodaelus prompt mode.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "prepare");
+});
+
+test("isMutatingMode includes prepare; isReadOnlyMode excludes it", () => {
+  assert.equal(isMutatingMode("prepare"), true);
+  assert.equal(isReadOnlyMode("prepare"), false);
+});
+
+test("detectKodaelusMode: leading activation beats body prompt mentions", () => {
+  const paste = [
+    "use kodaelus main",
+    "",
+    "# Feature",
+    "Update Prompt mode (1). Prior: use kodaelus 1",
+    "Kodaelus 1 (Prompt mode) produces prompts.",
+    "Docs mention kodaelus prompt mode and say use kodaelus prompt to draft.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("detectKodaelusMode: body-only activation still works without leading phrase", () => {
+  const delayed = [
+    "Please implement the following after review.",
+    "",
+    "use kodaelus main",
+    "",
+    "# Task",
+    "Ship the fix.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(delayed), "main");
 });
 
 test("getScopeStatus uses count > limit (allow exactly limit files)", () => {
@@ -157,5 +201,6 @@ test("detectSuggestSubMode and isMutatingMode", () => {
   assert.equal(detectSuggestSubMode("use kodaelus suggest"), null);
   assert.equal(isMutatingMode("main"), true);
   assert.equal(isMutatingMode("lite"), true);
+  assert.equal(isMutatingMode("prepare"), true);
   assert.equal(isMutatingMode("prompt"), false);
 });
