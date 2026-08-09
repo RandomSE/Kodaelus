@@ -37,6 +37,11 @@
         "failClosed": true
       },
       {
+        "command": "node ./hooks/secrets-guard.mjs",
+        "matcher": "Write|StrReplace|ApplyPatch",
+        "failClosed": true
+      },
+      {
         "command": "node ./hooks/dash-guard.mjs",
         "matcher": "Write|StrReplace|ApplyPatch"
       },
@@ -51,6 +56,11 @@
         "matcher": "Delete|ApplyPatch"
       }
     ],
+    "afterShellExecution": [
+      {
+        "command": "node ./hooks/shell-evidence-recorder.mjs"
+      }
+    ],
     "afterAgentResponse": [
       {
         "command": "node ./hooks/scope-creep-guard.mjs"
@@ -58,6 +68,15 @@
       {
         "command": "node ./hooks/confidence-evidence-guard.mjs",
         "failClosed": true
+      },
+      {
+        "command": "node ./hooks/delivery-structure-guard.mjs"
+      },
+      {
+        "command": "node ./hooks/prompt-fence-guard.mjs"
+      },
+      {
+        "command": "node ./hooks/test-evidence-guard.mjs"
       },
       {
         "command": "node ./hooks/dash-guard.mjs"
@@ -73,6 +92,20 @@
       {
         "command": "node ./hooks/confidence-evidence-guard.mjs",
         "failClosed": true
+      },
+      {
+        "command": "node ./hooks/delivery-structure-guard.mjs",
+        "failClosed": true,
+        "loop_limit": 2
+      },
+      {
+        "command": "node ./hooks/prompt-fence-guard.mjs",
+        "failClosed": true,
+        "loop_limit": 2
+      },
+      {
+        "command": "node ./hooks/test-evidence-guard.mjs",
+        "loop_limit": 2
       },
       {
         "command": "node ./hooks/dash-guard.mjs",

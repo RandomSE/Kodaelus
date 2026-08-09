@@ -204,3 +204,33 @@ test("detectSuggestSubMode and isMutatingMode", () => {
   assert.equal(isMutatingMode("prepare"), true);
   assert.equal(isMutatingMode("prompt"), false);
 });
+
+test("prepare fix-cycle metadata and shell evidence", async () => {
+  const {
+    approvePrepareContinue,
+    isPrepareContinuePrompt,
+    isPrepareFixCycleCapped,
+    recordPrepareSuiteAttempt,
+    recordShellEvidence,
+    getSessionMetadata,
+    PREPARE_MAX_FIX_CYCLES,
+  } = await import("./session-store.mjs");
+
+  assert.equal(isPrepareContinuePrompt("prepare continue"), true);
+  assert.equal(PREPARE_MAX_FIX_CYCLES, 3);
+
+  activateSession("conv-prep-meta", "prepare");
+  recordPrepareSuiteAttempt("conv-prep-meta");
+  recordPrepareSuiteAttempt("conv-prep-meta");
+  recordPrepareSuiteAttempt("conv-prep-meta");
+  assert.equal(isPrepareFixCycleCapped("conv-prep-meta"), false);
+  recordPrepareSuiteAttempt("conv-prep-meta");
+  assert.equal(isPrepareFixCycleCapped("conv-prep-meta"), true);
+  approvePrepareContinue("conv-prep-meta");
+  assert.equal(isPrepareFixCycleCapped("conv-prep-meta"), false);
+
+  recordShellEvidence("conv-prep-meta", "npm test", "exit=0");
+  const meta = getSessionMetadata("conv-prep-meta");
+  assert.equal(meta?.shellEvidence.at(-1)?.command, "npm test");
+  deactivateSession("conv-prep-meta");
+});

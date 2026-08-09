@@ -62,3 +62,52 @@ export function denyReadOnlyShellDelete() {
       "Shell delete blocked in read-only Kodaelus mode. User must upgrade to main or lite.",
   };
 }
+
+/**
+ * @param {string} relativePath
+ * @returns {{ permission: 'deny', user_message: string, agent_message: string }}
+ */
+export function denyBugModeWrite(relativePath) {
+  return {
+    permission: "deny",
+    user_message:
+      `Bug Investigation mode blocks product edits to "${relativePath}". ` +
+      "Allowed: .kodaelus/**, *.test.*/*.spec.*, and diagnostic/instrumentation paths. " +
+      "Reply **use kodaelus bugfix** to ship a fix.",
+    agent_message:
+      `Bug Investigation mode: Write/StrReplace/ApplyPatch denied for "${relativePath}". ` +
+      "Use dossier/instrumentation/test paths only; upgrade with use kodaelus bugfix to fix.",
+  };
+}
+
+/**
+ * @param {string} relativePath
+ * @returns {{ permission: 'deny', user_message: string, agent_message: string }}
+ */
+export function denySuggestArtifactWrite(relativePath) {
+  return {
+    permission: "deny",
+    user_message:
+      `Suggest mode may only Write/StrReplace under .kodaelus/suggestions/ (blocked: "${relativePath}").`,
+    agent_message:
+      `Suggest mode artifact allowlist: only .kodaelus/suggestions/**. Denied "${relativePath}".`,
+  };
+}
+
+/**
+ * @param {string} relativePath
+ * @param {number} fixCycleCount
+ * @returns {{ permission: 'deny', user_message: string, agent_message: string }}
+ */
+export function denyPrepareFixCycle(relativePath, fixCycleCount) {
+  return {
+    permission: "deny",
+    user_message:
+      `Prepare mode fix-cycle cap reached (${fixCycleCount}/3). ` +
+      `Product edit denied for "${relativePath}". ` +
+      "Reply **prepare continue** or **allow more fix cycles** to unlock, or exit Prepare. Report **Not ready**.",
+    agent_message:
+      `Prepare fix-cycle cap (${fixCycleCount}/3): product edit to "${relativePath}" denied. ` +
+      "Force Not ready; no proposed commit message. User may reply prepare continue.",
+  };
+}

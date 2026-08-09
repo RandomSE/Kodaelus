@@ -44,3 +44,89 @@ test("isMutatingMode is true for main, lite, and prepare", () => {
   assert.equal(isMutatingMode("prepare"), true);
   assert.equal(isMutatingMode("prompt"), false);
 });
+
+test("sticky: main + same-block use kodaelus 1 → main", () => {
+  const paste = ["use kodaelus main", "use kodaelus 1", "# Goal", "Ship it."].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("sticky: main + kodaelus prompt mode mention → main", () => {
+  const paste = [
+    "use kodaelus main",
+    "Recommended draft mentioned kodaelus prompt mode earlier.",
+    "# Spec",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("sticky: use kodaelus 1 alone → prompt", () => {
+  assert.equal(detectKodaelusMode("use kodaelus 1"), "prompt");
+});
+
+test("sticky: use kodaelus 1 then soft later-main without upgrade token → prompt", () => {
+  const paste = [
+    "use kodaelus 1",
+    "",
+    "Plan the change; we can switch to main later.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "prompt");
+});
+
+test("sticky: trailing use kodaelus main after body use kodaelus 1 → main", () => {
+  const paste = [
+    "Body mentions use kodaelus 1 and kodaelus prompt mode.",
+    "",
+    "use kodaelus main",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("sticky: explicit upgrade token beats earlier prompt phrase", () => {
+  const paste = [
+    "use kodaelus 1",
+    "",
+    "Later we will use kodaelus main for the fix.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("sticky: leftmost mutating upgrade wins among upgrades", () => {
+  assert.equal(
+    detectKodaelusMode("use kodaelus lite\n\nthen use kodaelus main"),
+    "lite",
+  );
+});
+
+test("sticky: bare use kodaelus with contaminated prompt body → main", () => {
+  const paste = [
+    "use kodaelus",
+    "Prior planner said use kodaelus 1 and kodaelus prompt mode.",
+  ].join("\n");
+  assert.equal(detectKodaelusMode(paste), "main");
+});
+
+test("sticky: run it / execute beat prompt body mentions", () => {
+  assert.equal(
+    detectKodaelusMode("Docs say use kodaelus 1.\n\nrun it"),
+    "main",
+  );
+  assert.equal(
+    detectKodaelusMode("kodaelus prompt mode was used.\n\nexecute"),
+    "main",
+  );
+});
+
+test("execute: whole-line execute upgrades; prose execute does not", () => {
+  assert.equal(detectKodaelusMode("execute"), "main");
+  assert.equal(detectKodaelusMode("execute!"), "main");
+  assert.equal(detectKodaelusMode("please execute."), "main");
+  assert.equal(detectKodaelusMode("execute the tests"), null);
+  assert.equal(
+    detectKodaelusMode("use kodaelus 1\n\nthen execute the migration"),
+    "prompt",
+  );
+  assert.equal(
+    detectKodaelusMode("Body mentions use kodaelus 1.\n\nexecute the plan"),
+    "prompt",
+  );
+});

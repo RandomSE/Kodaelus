@@ -10,6 +10,80 @@ export const READ_ONLY_MODES = new Set(["prompt", "suggest", "question"]);
 export const LEADING_ACTIVATION_MAX_CHARS = 600;
 
 /**
+ * Explicit mutating upgrade tokens. When any match, leftmost upgrade wins and
+ * read-only / bug / suggest phrases in the same message are ignored.
+ * @type {{ mode: KodaelusMode, pattern: RegExp }[]}
+ */
+const MUTATING_UPGRADE_PATTERNS = [
+  { mode: "main", pattern: /\bbugfix\b/gi },
+  // Spaced/hyphen "bug fix" only with use-kodaelus qualifier or as a whole-line token
+  // (avoids prose "Bug fix:" / "Bug fix. TDD." in Recommended specs).
+  {
+    mode: "main",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+bug[-\s]fix\b/gi,
+  },
+  {
+    mode: "main",
+    pattern: /(?:^|\n)\s*bug[-\s]fix\s*[.!]?\s*(?=\n|$)/gi,
+  },
+  { mode: "main", pattern: /\brun it\b/gi },
+  // Standalone upgrade line only (avoid "execute the tests" / "execute the plan").
+  { mode: "main", pattern: /(?:^|\n)\s*(?:please\s+)?execute\s*[.!]?\s*(?=\n|$)/gi },
+  {
+    mode: "main",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(0|main)\b/gi,
+  },
+  {
+    mode: "main",
+    // Bare `use kodaelus` / `use kodaelus` + non-mode words; exclude qualified modes.
+    pattern:
+      /\b(use|with|activate|enable|switch to)\s+kodaelus\b(?!\s+(0|main|1|p|prompt|2|b|bug|suggest|3|lite|4|fast|q|question|5|prepare|prep|6)\b)/gi,
+  },
+  {
+    mode: "lite",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(lite|fast|4)\b/gi,
+  },
+  { mode: "lite", pattern: /\bkodaelus\s+lite\s+mode\b/gi },
+  {
+    mode: "prepare",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(prepare|prep|6)\b/gi,
+  },
+  { mode: "prepare", pattern: /\bkodaelus\s+prepare\s+mode\b/gi },
+];
+
+/**
+ * Non-upgrade activation phrases (read-only, bug, suggest). Used when no
+ * mutating upgrade token is present; leftmost match wins.
+ * @type {{ mode: KodaelusMode, pattern: RegExp }[]}
+ */
+const OTHER_ACTIVATION_PATTERNS = [
+  {
+    mode: "bug",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(2|b|bug)\b/gi,
+  },
+  { mode: "bug", pattern: /\bkodaelus\s+(2|bug\s+mode)\b/gi },
+  { mode: "bug", pattern: /\bkodaelus\s+b\b/gi },
+  {
+    mode: "suggest",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+suggest\b/gi,
+  },
+  { mode: "suggest", pattern: /\bkodaelus\s+suggest\s+mode\b/gi },
+  { mode: "suggest", pattern: /\buse\s+kodaelus\s+3\b/gi },
+  {
+    mode: "question",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(q|question)\b/gi,
+  },
+  { mode: "question", pattern: /\bkodaelus\s+question\s+mode\b/gi },
+  { mode: "question", pattern: /\buse\s+kodaelus\s+5\b/gi },
+  {
+    mode: "prompt",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(1|p|prompt)\b/gi,
+  },
+  { mode: "prompt", pattern: /\bkodaelus\s+(1|planner|prompt\s+mode)\b/gi },
+  { mode: "main", pattern: /\bkodaelus\s+mode\b/gi },
+];
+
+/**
  * @param {string} prompt
  */
 export function isDeactivatePrompt(prompt) {
@@ -19,8 +93,7 @@ export function isDeactivatePrompt(prompt) {
 /**
  * Leading preamble used for mode activation: first contiguous non-empty lines
  * until a blank line or a markdown heading (after at least one line).
- * Prevents body mentions of "use kodaelus 1" / "kodaelus prompt mode" from
- * overriding a leading `use kodaelus main` upgrade paste.
+ * Retained for callers/tests; primary detection now uses leftmost + upgrade-wins.
  *
  * @param {string} prompt
  * @returns {string}
@@ -51,7 +124,41 @@ export function extractLeadingActivationZone(prompt) {
 }
 
 /**
- * Mode detection against a single text slice (no leading-zone preference).
+ * @param {string} text
+ * @param {{ mode: KodaelusMode, pattern: RegExp }[]} patterns
+ * @returns {{ mode: KodaelusMode, index: number } | null}
+ */
+function findLeftmostMatch(text, patterns) {
+  /** @type {{ mode: KodaelusMode, index: number } | null} */
+  let best = null;
+
+  for (const { mode, pattern } of patterns) {
+    pattern.lastIndex = 0;
+    const match = pattern.exec(text);
+    if (!match || match.index == null) continue;
+    if (best === null || match.index < best.index) {
+      best = { mode, index: match.index };
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Leftmost explicit mutating upgrade token in text, or null.
+ *
+ * @param {string} text
+ * @returns {KodaelusMode | null}
+ */
+export function detectExplicitMutatingUpgradeMode(text) {
+  if (typeof text !== "string" || !text.trim()) return null;
+  const hit = findLeftmostMatch(text, MUTATING_UPGRADE_PATTERNS);
+  return hit?.mode ?? null;
+}
+
+/**
+ * Mode detection against a single text slice using leftmost index among peers.
+ * Explicit mutating upgrade tokens beat read-only / bug / suggest phrases.
  *
  * @param {string} text
  * @returns {KodaelusMode | null}
@@ -62,69 +169,11 @@ export function detectKodaelusModeInText(text) {
 
   if (isDeactivatePrompt(normalized)) return null;
 
-  if (/\bbugfix\b/i.test(normalized) || /\bbug[-\s]fix\b/i.test(normalized)) {
-    return "main";
-  }
+  const upgrade = findLeftmostMatch(normalized, MUTATING_UPGRADE_PATTERNS);
+  if (upgrade) return upgrade.mode;
 
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(2|b|bug)\b/i.test(normalized) ||
-    /\bkodaelus\s+(2|bug\s+mode)\b/i.test(normalized) ||
-    /\bkodaelus\s+b\b/i.test(normalized)
-  ) {
-    return "bug";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+suggest\b/i.test(normalized) ||
-    /\bkodaelus\s+suggest\s+mode\b/i.test(normalized) ||
-    /\buse\s+kodaelus\s+3\b/i.test(normalized)
-  ) {
-    return "suggest";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(q|question)\b/i.test(normalized) ||
-    /\bkodaelus\s+question\s+mode\b/i.test(normalized) ||
-    /\buse\s+kodaelus\s+5\b/i.test(normalized)
-  ) {
-    return "question";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(lite|fast)\b/i.test(normalized) ||
-    /\bkodaelus\s+lite\s+mode\b/i.test(normalized) ||
-    /\buse\s+kodaelus\s+4\b/i.test(normalized)
-  ) {
-    return "lite";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(prepare|prep|6)\b/i.test(normalized) ||
-    /\bkodaelus\s+prepare\s+mode\b/i.test(normalized) ||
-    /\buse\s+kodaelus\s+6\b/i.test(normalized)
-  ) {
-    return "prepare";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(1|p|prompt)\b/i.test(normalized) ||
-    /\bkodaelus\s+(1|planner|prompt\s+mode)\b/i.test(normalized)
-  ) {
-    return "prompt";
-  }
-
-  if (/\b(run it|execute)\b/i.test(normalized)) {
-    return "main";
-  }
-
-  if (
-    /\b(use|with|activate|enable|switch to)\s+kodaelus(?:\s+(0|main))?\b/i.test(normalized) ||
-    /\bkodaelus\s+mode\b/i.test(normalized)
-  ) {
-    return "main";
-  }
-
-  return null;
+  const other = findLeftmostMatch(normalized, OTHER_ACTIVATION_PATTERNS);
+  return other?.mode ?? null;
 }
 
 /**
@@ -136,10 +185,6 @@ export function detectKodaelusMode(prompt) {
 
   // Full-text deactivate always wins (opt-out mid-message).
   if (isDeactivatePrompt(prompt)) return null;
-
-  const leading = extractLeadingActivationZone(prompt);
-  const fromLeading = detectKodaelusModeInText(leading);
-  if (fromLeading !== null) return fromLeading;
 
   return detectKodaelusModeInText(prompt);
 }

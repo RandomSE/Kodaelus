@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  isAllowedSuggestShellCommand,
+  isBugDiagnosticWritePath,
+  isDiagnosticInstrumentationPath,
+  isProductEditPath,
+  isSecretsFixturePath,
+  isSuggestArtifactPath,
+  isTestOrSpecPath,
+  isWriteOrStrReplaceTool,
+  isWriteStrReplaceOrPatchTool,
+} from "./path-allowlist.mjs";
+
+test("isBugDiagnosticWritePath allows .kodaelus, tests, diagnostic heuristics", () => {
+  assert.equal(isBugDiagnosticWritePath(".kodaelus/bugs/x-dossier.md"), true);
+  assert.equal(isBugDiagnosticWritePath(".kodaelus/bugs/x/traces/a.log"), true);
+  assert.equal(isBugDiagnosticWritePath("src/foo.test.ts"), true);
+  assert.equal(isBugDiagnosticWritePath("src/foo.spec.mjs"), true);
+  assert.equal(isBugDiagnosticWritePath("debug/trace.js"), true);
+  assert.equal(isBugDiagnosticWritePath("src/instrumentation/hook.ts"), true);
+  assert.equal(isBugDiagnosticWritePath("repro_login.js"), true);
+  assert.equal(isBugDiagnosticWritePath("src/app.ts"), false);
+  assert.equal(isBugDiagnosticWritePath("install/hooks/scope-creep-guard.mjs"), false);
+});
+
+test("isSuggestArtifactPath only under .kodaelus/suggestions", () => {
+  assert.equal(isSuggestArtifactPath(".kodaelus/suggestions/2026-01-01-issues.md"), true);
+  assert.equal(isSuggestArtifactPath(".kodaelus/suggestions"), true);
+  assert.equal(isSuggestArtifactPath(".kodaelus/bugs/x.md"), false);
+  assert.equal(isSuggestArtifactPath("src/x.ts"), false);
+});
+
+test("isSecretsFixturePath allowlist", () => {
+  assert.equal(isSecretsFixturePath("test/fixtures/keys.env"), true);
+  assert.equal(isSecretsFixturePath("src/foo.test.ts"), true);
+  assert.equal(isSecretsFixturePath(".kodaelus/tmp.env"), true);
+  assert.equal(isSecretsFixturePath("src/config.ts"), false);
+});
+
+test("isProductEditPath excludes diagnostic allowlist", () => {
+  assert.equal(isProductEditPath("src/app.ts"), true);
+  assert.equal(isProductEditPath("src/app.test.ts"), false);
+  assert.equal(isProductEditPath(".kodaelus/bugs/d.md"), false);
+});
+
+test("isAllowedSuggestShellCommand allows mkdir under suggestions", () => {
+  assert.equal(isAllowedSuggestShellCommand("mkdir .kodaelus/suggestions"), true);
+  assert.equal(isAllowedSuggestShellCommand("mkdir -p .kodaelus/suggestions"), true);
+  assert.equal(isAllowedSuggestShellCommand("mkdir src/foo"), false);
+  assert.equal(isAllowedSuggestShellCommand("npm install"), false);
+});
+
+test("isAllowedSuggestShellCommand rejects paths that only contain suggestions substring", () => {
+  assert.equal(
+    isAllowedSuggestShellCommand("mkdir /home/.kodaelus/suggestions/file"),
+    false,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand("mkdir evil/.kodaelus/suggestions"),
+    false,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand("mkdir not-.kodaelus/suggestions-trap"),
+    false,
+  );
+});
+
+test("tool name helpers", () => {
+  assert.equal(isWriteOrStrReplaceTool("Write"), true);
+  assert.equal(isWriteOrStrReplaceTool("StrReplace"), true);
+  assert.equal(isWriteOrStrReplaceTool("ApplyPatch"), false);
+  assert.equal(isWriteStrReplaceOrPatchTool("ApplyPatch"), true);
+  assert.equal(isTestOrSpecPath("a.test.js"), true);
+  assert.equal(isDiagnosticInstrumentationPath("diag/out.log"), true);
+});
