@@ -77,8 +77,19 @@ export const HARDENED_POLICY_KEYWORDS = [
   "Cursor clarifying questions",
   "minimal scope",
   "ambiguity pre-emption",
+  "activation-safe wording",
+  "fence preamble",
+  "Soft stickiness",
   "resolution priority",
+  "Same-turn",
   "ask-question-guard.mjs",
+  "delivery-structure-guard.mjs",
+  "prompt-fence-guard.mjs",
+  "secrets-guard.mjs",
+  "test-evidence-guard.mjs",
+  "shell-evidence-recorder.mjs",
+  "prepare continue",
+  ".kodaelus/suggestions/",
 ];
 
 /**

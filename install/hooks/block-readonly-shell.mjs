@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
  * User-level Cursor hook: block shell workspace mutators in read-only Kodaelus modes.
+ * Suggest mode: allow mkdir under .kodaelus/suggestions/** only.
  * Event: beforeShellExecution
  */
 import { denyReadOnlyShellDelete } from "./lib/mode-guard.mjs";
+import { isAllowedSuggestShellCommand } from "./lib/path-allowlist.mjs";
 import { isBlockedReadOnlyShellCommand } from "./lib/shell-mutator-guard.mjs";
 import { getSessionMode, isReadOnlyMode, isSessionActive } from "./lib/session-store.mjs";
 
@@ -54,6 +56,9 @@ try {
 
   const mode = getSessionMode(conversationId) ?? "main";
   if (isReadOnlyMode(mode) && isBlockedReadOnlyShellCommand(command)) {
+    if (mode === "suggest" && isAllowedSuggestShellCommand(command)) {
+      allow();
+    }
     deny(mode);
   }
 } catch {

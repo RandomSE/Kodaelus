@@ -5,9 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { activateSession, deactivateSession } from "./lib/session-store.mjs";
+import { activateSession, deactivateSession, getSessionMode } from "./lib/session-store.mjs";
 
 const scopeHook = fileURLToPath(new URL("./scope-creep-guard.mjs", import.meta.url));
+const sessionHook = fileURLToPath(new URL("./kodaelus-session.mjs", import.meta.url));
 const deleteHook = fileURLToPath(new URL("./guard-delete.mjs", import.meta.url));
 const readonlyShellHook = fileURLToPath(
   new URL("./block-readonly-shell.mjs", import.meta.url),
@@ -162,4 +163,37 @@ test("allows npm test in prompt mode via block-readonly-shell", async () => {
   assert.deepEqual(JSON.parse(stdout), { permission: "allow" });
 
   deactivateSession("conv-prompt-npm-test");
+});
+
+test("same-turn prompt→main: Write allowed after contaminated upgrade paste", async () => {
+  activateSession("conv-prompt-to-main", "prompt");
+  assert.equal(getSessionMode("conv-prompt-to-main"), "prompt");
+
+  const contaminated = [
+    "use kodaelus main",
+    "Body still says use kodaelus 1 and kodaelus prompt mode.",
+    "# Task",
+    "Implement sticky upgrade.",
+  ].join("\n");
+
+  await runHook(sessionHook, {
+    hook_event_name: "beforeSubmitPrompt",
+    conversation_id: "conv-prompt-to-main",
+    prompt: contaminated,
+    workspace_roots: [tempProject],
+  });
+
+  assert.equal(getSessionMode("conv-prompt-to-main"), "main");
+
+  const { stdout } = await runHook(scopeHook, {
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-prompt-to-main",
+    tool_name: "Write",
+    tool_input: { path: join(tempProject, "sticky-ok.ts"), contents: "ok\n" },
+    workspace_roots: [tempProject],
+  });
+
+  assert.deepEqual(JSON.parse(stdout), { permission: "allow" });
+
+  deactivateSession("conv-prompt-to-main");
 });

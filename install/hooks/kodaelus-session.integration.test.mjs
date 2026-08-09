@@ -9,7 +9,7 @@ import { copyToTrash } from "./lib/deletion-guard.mjs";
 import { appendManifestEntry } from "./lib/deletion-manifest-io.mjs";
 import { recordPreferenceCandidate } from "./lib/preference-learning.mjs";
 import { ensureProjectGuidelines } from "./lib/project-guidelines.mjs";
-import { activateSession, deactivateSession } from "./lib/session-store.mjs";
+import { activateSession, deactivateSession, getSessionMode } from "./lib/session-store.mjs";
 
 const sessionHook = fileURLToPath(new URL("./kodaelus-session.mjs", import.meta.url));
 
@@ -124,4 +124,26 @@ test("appends preference on third explicit record via env", async () => {
   assert.equal(direct.count, 1);
 
   deactivateSession("conv-pref");
+});
+
+test("same-turn: prompt session upgrades to main on contaminated main paste", async () => {
+  activateSession("conv-sticky-upgrade", "prompt");
+  assert.equal(getSessionMode("conv-sticky-upgrade"), "prompt");
+
+  const contaminated = [
+    "use kodaelus main",
+    "Prior Recommended prompt said use kodaelus 1 and kodaelus prompt mode.",
+    "# Bugfix",
+    "Ship the sticky upgrade fix.",
+  ].join("\n");
+
+  await runSessionHook({
+    hook_event_name: "beforeSubmitPrompt",
+    conversation_id: "conv-sticky-upgrade",
+    prompt: contaminated,
+    workspace_roots: [tempProject],
+  });
+
+  assert.equal(getSessionMode("conv-sticky-upgrade"), "main");
+  deactivateSession("conv-sticky-upgrade");
 });

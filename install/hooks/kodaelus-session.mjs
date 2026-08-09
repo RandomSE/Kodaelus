@@ -14,14 +14,19 @@ import {
 import { tryRestoreFromPrompt } from "./lib/restore-handler.mjs";
 import {
   activateSession,
+  approvePrepareContinue,
   approveScope,
   clearSession,
   deactivateSession,
+  detectExplicitMutatingUpgradeMode,
   detectKodaelusMode,
   detectSuggestSubMode,
+  getSessionMode,
   getUnverifiedPendingDeletes,
   isActivatePrompt,
   isDeactivatePrompt,
+  isPrepareContinuePrompt,
+  isReadOnlyMode,
   isScopeApprovePrompt,
   isSessionActive,
 } from "./lib/session-store.mjs";
@@ -86,11 +91,26 @@ try {
       deactivateSession(conversationId);
     } else if (isScopeApprovePrompt(prompt)) {
       approveScope(conversationId);
-    } else if (isActivatePrompt(prompt)) {
-      const mode = detectKodaelusMode(prompt) ?? "main";
-      const suggestSubMode = detectSuggestSubMode(prompt);
-      activateSession(conversationId, mode, suggestSubMode);
-      ensureProjectGuidelines(projectRoot);
+    } else if (isPrepareContinuePrompt(prompt) && isSessionActive(conversationId)) {
+      approvePrepareContinue(conversationId);
+    } else {
+      // Same-turn: if already in a read-only mode and this message contains an
+      // explicit mutating upgrade token, persist that mode before any preToolUse
+      // deny can fire (even when body text still mentions prompt/suggest phrases).
+      let mode = detectKodaelusMode(prompt);
+      if (isSessionActive(conversationId)) {
+        const current = getSessionMode(conversationId);
+        if (isReadOnlyMode(current)) {
+          const upgrade = detectExplicitMutatingUpgradeMode(prompt);
+          if (upgrade) mode = upgrade;
+        }
+      }
+      if (mode != null || isActivatePrompt(prompt)) {
+        const resolved = mode ?? "main";
+        const suggestSubMode = detectSuggestSubMode(prompt);
+        activateSession(conversationId, resolved, suggestSubMode);
+        ensureProjectGuidelines(projectRoot);
+      }
     }
 
     if (isSessionActive(conversationId)) {

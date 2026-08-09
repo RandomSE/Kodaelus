@@ -1,5 +1,8 @@
 export {
+  detectExplicitMutatingUpgradeMode,
   detectKodaelusMode,
+  detectKodaelusModeInText,
+  extractLeadingActivationZone,
   isBugInvestigationMode,
   isDeactivatePrompt,
   isMutatingMode,

@@ -23,15 +23,27 @@ import { dirname, join } from "node:path";
  */
 
 /**
+ * @typedef {object} ShellEvidenceEntry
+ * @property {string} command
+ * @property {string} outcome
+ * @property {string} at
+ */
+
+/**
  * @typedef {object} SessionMetadata
  * @property {number | null} planFileEstimate
  * @property {string[]} touchedFiles
  * @property {boolean} scopeApproved
  * @property {PendingDelete[]} pendingDeletes
  * @property {SuggestSubMode | null} suggestSubMode
+ * @property {number} prepareSuiteAttempts
+ * @property {number} prepareFixCycleCount
+ * @property {boolean} prepareContinueApproved
+ * @property {ShellEvidenceEntry[]} shellEvidence
  */
 
 import {
+  detectExplicitMutatingUpgradeMode,
   detectKodaelusMode,
   isBugInvestigationMode,
   isDeactivatePrompt,
@@ -40,6 +52,7 @@ import {
 } from "./kodaelus-mode.mjs";
 
 export {
+  detectExplicitMutatingUpgradeMode,
   detectKodaelusMode,
   isBugInvestigationMode,
   isDeactivatePrompt,
@@ -48,6 +61,10 @@ export {
 } from "./kodaelus-mode.mjs";
 
 const SCOPE_APPROVE = /\b(scope approved|proceed with scope|approve scope)\b/i;
+const PREPARE_CONTINUE =
+  /\b(prepare continue|allow more fix cycles|continue prepare fix(?:es| cycles)?)\b/i;
+/** Max fix-rerun cycles before product edits are denied (policy soft cap). */
+export const PREPARE_MAX_FIX_CYCLES = 3;
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_MAX_WAIT_MS = Number(process.env.KODAELUS_STORE_LOCK_MAX_WAIT_MS) || 5_000;
@@ -61,6 +78,10 @@ function emptyMetadata() {
     scopeApproved: false,
     pendingDeletes: [],
     suggestSubMode: null,
+    prepareSuiteAttempts: 0,
+    prepareFixCycleCount: 0,
+    prepareContinueApproved: false,
+    shellEvidence: [],
   };
 }
 
@@ -166,6 +187,27 @@ function normalizeMetadata(raw) {
         };
       })
       .filter((row) => row.path);
+  }
+  if (typeof record.prepareSuiteAttempts === "number" && record.prepareSuiteAttempts >= 0) {
+    base.prepareSuiteAttempts = Math.floor(record.prepareSuiteAttempts);
+  }
+  if (typeof record.prepareFixCycleCount === "number" && record.prepareFixCycleCount >= 0) {
+    base.prepareFixCycleCount = Math.floor(record.prepareFixCycleCount);
+  }
+  if (record.prepareContinueApproved === true) base.prepareContinueApproved = true;
+  if (Array.isArray(record.shellEvidence)) {
+    base.shellEvidence = record.shellEvidence
+      .filter((row) => row && typeof row === "object")
+      .map((row) => {
+        const item = /** @type {Record<string, unknown>} */ (row);
+        return {
+          command: `${item.command ?? ""}`,
+          outcome: `${item.outcome ?? ""}`,
+          at: `${item.at ?? ""}`,
+        };
+      })
+      .filter((row) => row.command)
+      .slice(-50);
   }
   return base;
 }
@@ -275,6 +317,10 @@ export function isActivatePrompt(prompt) {
 
 export function isScopeApprovePrompt(prompt) {
   return typeof prompt === "string" && SCOPE_APPROVE.test(prompt);
+}
+
+export function isPrepareContinuePrompt(prompt) {
+  return typeof prompt === "string" && PREPARE_CONTINUE.test(prompt);
 }
 
 export function isSessionActive(conversationId) {
@@ -479,6 +525,7 @@ export function activateSession(conversationId, mode = "main", suggestSubMode = 
   return withStoreLock(() => {
     const store = readStoreUnlocked();
     const alreadyActive = store.conversationIds.includes(conversationId);
+    const previousMode = alreadyActive ? store.modes[conversationId] : null;
     if (!alreadyActive) {
       store.conversationIds.push(conversationId);
       store.metadata[conversationId] = emptyMetadata();
@@ -487,6 +534,14 @@ export function activateSession(conversationId, mode = "main", suggestSubMode = 
     const meta = store.metadata[conversationId] ?? emptyMetadata();
     if (subMode) meta.suggestSubMode = subMode;
     if (resolvedMode === "suggest" && subMode) meta.suggestSubMode = subMode;
+    if (resolvedMode === "prepare" && previousMode !== "prepare") {
+      meta.prepareSuiteAttempts = 0;
+      meta.prepareFixCycleCount = 0;
+      meta.prepareContinueApproved = false;
+    }
+    if (resolvedMode !== "prepare") {
+      meta.prepareContinueApproved = false;
+    }
     store.metadata[conversationId] = meta;
     writeStoreUnlocked(store);
     return true;
@@ -510,4 +565,84 @@ export function deactivateSession(conversationId) {
 
 export function clearSession(conversationId) {
   return deactivateSession(conversationId);
+}
+
+/**
+ * @param {string} conversationId
+ */
+export function approvePrepareContinue(conversationId) {
+  if (!conversationId) return false;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.prepareContinueApproved = true;
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
+}
+
+/**
+ * Record a Prepare full-suite attempt. After the first attempt, further suite
+ * runs count as fix-rerun cycles (capped at PREPARE_MAX_FIX_CYCLES).
+ * @param {string} conversationId
+ * @returns {{ suiteAttempts: number, fixCycleCount: number } | null}
+ */
+export function recordPrepareSuiteAttempt(conversationId) {
+  if (!conversationId) return null;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return null;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.prepareSuiteAttempts += 1;
+    if (meta.prepareSuiteAttempts > 1) {
+      meta.prepareFixCycleCount = Math.min(
+        PREPARE_MAX_FIX_CYCLES,
+        meta.prepareFixCycleCount + 1,
+      );
+    }
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return {
+      suiteAttempts: meta.prepareSuiteAttempts,
+      fixCycleCount: meta.prepareFixCycleCount,
+    };
+  });
+}
+
+/**
+ * @param {string} conversationId
+ * @returns {boolean}
+ */
+export function isPrepareFixCycleCapped(conversationId) {
+  const meta = getSessionMetadata(conversationId);
+  if (!meta) return false;
+  if (meta.prepareContinueApproved) return false;
+  return meta.prepareFixCycleCount >= PREPARE_MAX_FIX_CYCLES;
+}
+
+/**
+ * @param {string} conversationId
+ * @param {string} command
+ * @param {string} [outcome]
+ */
+export function recordShellEvidence(conversationId, command, outcome = "") {
+  if (!conversationId || !command) return false;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.shellEvidence.push({
+      command: `${command}`.slice(0, 500),
+      outcome: `${outcome}`.slice(0, 200),
+      at: new Date().toISOString(),
+    });
+    if (meta.shellEvidence.length > 50) {
+      meta.shellEvidence = meta.shellEvidence.slice(-50);
+    }
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
 }

@@ -22,7 +22,7 @@ Kodaelus can be activated for an **entire conversation**, not just one message. 
 
 Any of the following activates Kodaelus for the current chat until opt-out (mode depends on phrase, see **Kodaelus Modes**):
 
-- **Main (0):** `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `use kodaelus bugfix`, `use kodaelus bug fix`, `run it`, `execute`
+- **Main (0):** `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `use kodaelus bugfix`, `use kodaelus bug fix`, `run it`, standalone `execute` (whole line; not "execute the …"), `bugfix`, whole-line `bug fix` (not mid-sentence "Bug fix:")
 - **Prompt (1):** `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus planner`, `kodaelus prompt mode`
 - **Bug Investigation (2):** `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` - **not** `bugfix` / `bug fix`
 - **Suggest (3):** `use kodaelus suggest`, `use kodaelus 3`, `kodaelus suggest mode`; sub-modes: `use kodaelus suggest issues`, `use kodaelus suggest features`
@@ -35,8 +35,9 @@ Any of the following activates Kodaelus for the current chat until opt-out (mode
 
 - **Main agent and subagent** must read and follow this file on **every substantive turn**, then **`.kodaelus/instructions.md`** when present (see **Project-Specific Guidelines**).
 - Apply the **Response Structure** and **Done Criteria** for the active mode.
-- **Prompt / Suggest / Question modes:** read-only, no mutating tools until upgrade to Main, Lite, or Prepare.
-- **Bug Investigation mode:** diagnostic writes allowed (logging, repro tests, `.kodaelus/bugs/`); do not ship the fix until Main upgrade.
+- **Soft stickiness:** If the **current** user message contains an explicit mutating upgrade token (`use kodaelus main`, `use kodaelus`, `run it`, standalone `execute`, `use kodaelus lite`, `use kodaelus prepare`, `use kodaelus bugfix`, etc.), operate under that mutating mode's response structure for **this turn** even when earlier turns were Prompt / Suggest / Question. Do not stay in Recommended-prompt-only behavior after an upgrade message.
+- **Prompt / Suggest / Question modes:** read-only, no mutating tools until upgrade to Main, Lite, or Prepare (Suggest may persist under `.kodaelus/suggestions/**` only).
+- **Bug Investigation mode:** diagnostic writes allowed (logging, repro tests, `.kodaelus/bugs/` and allowlisted test/diagnostic paths); product edits denied by hooks; do not ship the fix until Main upgrade.
 - **Lite mode:** implementation allowed with reduced ceremony, see **Lite mode (4)**; distinct from **Delivery Tier Lite**.
 - **Prepare mode:** mutating allowed for test-fix loops only; full suite + commit message proposal; never run mutating git; see **Prepare mode (6)**.
 - Do **not** run mutating git commands, hooks allow only `git status`, `git diff`, and `git log`; ask the user to run other git manually if needed.
@@ -50,11 +51,16 @@ User phrases such as **stop kodaelus**, **disable kodaelus**, **normal mode**, o
 | Layer | What it does |
 |-------|----------------|
 | This policy + global `kodaelus-session` rule | Keeps Kodaelus behavior and mode across follow-up messages |
-| User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs, mode, scope metadata via `detectKodaelusMode` |
-| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **`block-readonly-shell`** / `extractPreferenceIntent`-adjacent `isReadOnlyMode` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file `>`/`>>` redirects, etc.); **requires** trash backup + manifest for shell rm in Main/Lite/Prepare |
+| User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs, mode, scope metadata via `detectKodaelusMode`; **`prepare continue`** / **`allow more fix cycles`** unlocks Prepare product edits after fix-cycle cap |
+| User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **`block-readonly-shell`** / `extractPreferenceIntent`-adjacent `isReadOnlyMode` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file `>`/`>>` redirects, etc.); Suggest allows **`mkdir`** under `.kodaelus/suggestions/**` only; **requires** trash backup + manifest for shell rm in Main/Lite/Prepare |
+| User hook (`afterShellExecution`) (`shell-evidence-recorder.mjs`) | Records test-like command outcomes into session metadata; increments Prepare full-suite / fix-cycle counters |
 | User hook (`preToolUse` Delete) | **Hard-blocks** entry-point deletes; denies whole-file deletes outside `.kodaelus/` when `isBugInvestigationMode`; **requires** trash backup + manifest before Delete tool in Main/Lite/Prepare (`guard-delete.mjs`, `failClosed`) |
-| User hook (`preToolUse` Write/StrReplace/Delete/ApplyPatch) | **`isReadOnlyMode`** denies mutating tools in Prompt/Suggest/Question; **hard-blocks** edits past scope limit until user replies **`scope approved`** |
+| User hook (`preToolUse` Write/StrReplace/Delete/ApplyPatch) | **`isReadOnlyMode`** denies mutating tools in Prompt/Suggest/Question except Suggest **Write/StrReplace** under `.kodaelus/suggestions/**`; Bug Investigation allows Write/StrReplace/ApplyPatch only on diagnostic allowlist (`.kodaelus/**`, `*.test.*`/`*.spec.*`, instrumentation paths); Prepare denies product edits after **3** fix-rerun cycles until **`prepare continue`**; **hard-blocks** edits past scope limit until user replies **`scope approved`** |
+| User hook (`preToolUse` Write/StrReplace/ApplyPatch) (`secrets-guard.mjs`) | Denies obvious secrets (API keys, private key blocks, `.env` secret bodies) outside fixtures / test / `.kodaelus/**` |
 | User hooks (`afterAgentResponse`, `stop`) | Parse Plan file estimates; flag bare `Confidence: NN%` without adjacent `Evidence:` |
+| User hooks (`afterAgentResponse`, `stop`) (`delivery-structure-guard.mjs`) | Main/Bug/Prepare: require mode sections (Delivery Self-Check, Follow-Up Queue, Prepare Ready vs Not ready) before clean stop |
+| User hooks (`afterAgentResponse`, `stop`) (`prompt-fence-guard.mjs`) | Prompt mode: require fenced Recommended block with fence preamble; flag Prompt activation phrases inside the fence |
+| User hooks (`afterAgentResponse`, `stop`) (`test-evidence-guard.mjs`) | Main/Prepare soft-gate: when Implementation occurred, require recorded test outcomes in delivery or session shell log |
 | User hook (`preToolUse` Write/StrReplace/ApplyPatch) + `stop` (`dash-guard.mjs`) | **Block-and-correct** unicode dashes (U+2013/U+2014): deny edits containing dashes; `stop` follow-up when chat output contains dashes (instruction-only, optional sanitized artifact under `.kodaelus/dash-guard/`) |
 | User hook (`preToolUse` / `afterAgentResponse` / `stop`) (`ask-question-guard.mjs`) | Deny `AskQuestion`/`AskUserQuestion` in Main/Lite/Bug/Prepare when hooks fire; `stop` follow-up when open clarification prose is detected. **As of 2026 Cursor may still omit AskQuestion from the hook pipeline** (policy + ambiguity pre-emption remain primary) |
 | User hook (`postToolUse` Delete, `sessionEnd`) | Verify deletion manifest + backup after deletes |
@@ -526,7 +532,7 @@ Seven modes share session lock and opt-out phrases; behavior differs by how Koda
 
 | Mode | ID | Activation (case-insensitive) |
 |------|-----|-------------------------------|
-| **Main** | 0 | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, kodaelus subagent, `run it`, `execute`, **`use kodaelus bugfix`**, **`use kodaelus bug fix`**, `bugfix`, `bug fix` |
+| **Main** | 0 | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, kodaelus subagent, `run it`, standalone `execute` (whole line), **`use kodaelus bugfix`**, **`use kodaelus bug fix`**, `bugfix`, whole-line `bug fix` |
 | **Prompt** | 1 | `use kodaelus 1`, `use kodaelus p`, `use kodaelus prompt`, `kodaelus 1`, `kodaelus planner`, `kodaelus prompt mode` |
 | **Bug Investigation** | 2 | `use kodaelus 2`, `use kodaelus b`, `use kodaelus bug`, `kodaelus bug mode` - **not** `bugfix` / `bug fix` (those → Main) |
 | **Suggest** | 3 | `use kodaelus suggest`, `use kodaelus 3`, `kodaelus suggest mode`; **`use kodaelus suggest issues`**, **`use kodaelus suggest features`** |
@@ -536,7 +542,7 @@ Seven modes share session lock and opt-out phrases; behavior differs by how Koda
 
 **Mode Lite (4) vs Delivery Tier Lite:** **Mode Lite** is an activation phrase for fast small code changes. **Delivery Tier Lite** is a section subset (docs-only / trivial) within a mode. They are independent; Main can use tier Lite; Mode Lite uses its own reduced response structure.
 
-**Mode detection priority** (implemented in hooks as `detectKodaelusMode`): deactivate → `bugfix`/`bug fix` → Bug Investigation → Suggest sub-modes → Suggest → Question → Lite → Prepare → Prompt → Main.
+**Mode detection priority** (implemented in hooks as `detectKodaelusMode`): deactivate → if any explicit mutating upgrade token (`main` / `lite` / `prepare` / `run it` / standalone `execute` / `bugfix`), leftmost upgrade wins (ignores read-only phrases in the same message) → else leftmost among Bug / Suggest / Question / Prompt / other activations.
 
 ### Main mode (0), formerly Full mode
 
@@ -550,9 +556,12 @@ Seven modes share session lock and opt-out phrases; behavior differs by how Koda
 
 - **Behavior:** Read-only exploration allowed; **do not implement code or run mutating tools** unless the user upgrades to Main mode.
 - **Output:** Use the **Prompt mode Response Structure** (below), centered on a **Recommended Kodaelus Prompt** copy-paste block.
-- **ambiguity pre-emption (required):** Before emitting the Recommended Kodaelus Prompt, run an internal ambiguity pass. Identify every decision point a reasonable agent might ask about (scope: all X vs only Y, create vs update, delete vs deprecate, affect consumers vs isolate, etc.). Embed each answer as an **explicit constraint** in the prompt spec. Add a short **Ambiguity pre-emption** subsection listing what was pre-answered and why so the user can verify or override before running. Goal: zero Cursor clarifying questions on a well-formed Kodaelus 1 prompt.
+- **ambiguity pre-emption (required):** Before emitting the Recommended Kodaelus Prompt, run an internal ambiguity pass. Identify every decision point a reasonable agent might ask about (scope: all X vs only Y, create vs update, delete vs deprecate, affect consumers vs isolate, etc.). Embed each answer as an **explicit constraint** in the prompt spec. Add a short **Ambiguity pre-emption** subsection listing what was pre-answered and why so the user can verify or override before running. Goal: zero Cursor clarifying questions on a well-formed Prompt-mode (1) prompt.
 - **Recommended prompt must include:** restated goal and success criteria; scope in/out; target mode (Main vs Bug Investigation when relevant); **Delivery Tier** expectation; architecture decision points with preliminary **1 - 5 ratings**; task-type workflow hooks; test discovery / CI parity; TDD and verification expectations; **File Deletion Protocol** if cleanup is in scope; **Delivery Self-Check** expectation; request for **Follow-Up Queue** on delivery; repo-specific conventions detected; **Ambiguity pre-emption** subsection.
-- **Close with:** “Paste the block above and send `use kodaelus` or `use kodaelus main` to execute.”
+- **Activation-safe wording (required):** Inside the fenced Recommended prompt: (1) **fence preamble** - the first line MUST be the target mutating upgrade phrase (`use kodaelus main`, or `use kodaelus lite` / `use kodaelus prepare` / `use kodaelus bugfix` when that is the handoff), then a blank line, then the spec body; (2) **activation-safe body** - do **not** embed Prompt-mode activation phrases such as `use kodaelus 1`, `use kodaelus prompt`, `kodaelus prompt mode`, or `kodaelus planner` in the spec. Refer to modes by display name and id (e.g. "Prompt mode (1)", "Main mode (0)", "Bug Investigation mode (2)"). Display names are not upgrade tokens.
+- **Close with:** Emit one fenced copy-paste block that already includes the **fence preamble** (upgrade line + blank line + spec). Do not tell the user to add the upgrade outside the fence; users paste only the fence. Same-turn upgrades take effect when that block is sent.
+- **Hook validation:** `prompt-fence-guard.mjs` on `afterAgentResponse` / `stop` requires a valid fence preamble and flags raw Prompt activation phrases inside the fence.
+- **Soft stickiness (agent duty):** If the **current** user message contains an explicit mutating upgrade token, switch to that mutating mode's response structure and allow mutating work on **that turn**, even when earlier turns were Prompt / Suggest / Question. Do not stay in Recommended-prompt-only behavior after an upgrade message. Hooks persist mode on `beforeSubmitPrompt`; the agent must match.
 
 ### Bug Investigation mode (2)
 
@@ -562,9 +571,11 @@ Seven modes share session lock and opt-out phrases; behavior differs by how Koda
 
 - Investigation-first; **fix-deferred** until upgrade to Main.
 - **Allowed:** read/search/run diagnostics; add **temporary** logging/instrumentation; write **repro tests**; trace capture scripts; headless observation runs; artifacts under `.kodaelus/bugs/`.
+- **Hook write allowlist:** Write/StrReplace/ApplyPatch only for `.kodaelus/**`, `*.test.*` / `*.spec.*`, and diagnostic/instrumentation path heuristics; product source edits are **denied** (upgrade with `use kodaelus bugfix`).
 - **Not allowed:** ship the fix, refactor unrelated code, whole-file deletes (except `.kodaelus/` artifacts), claim the bug is “fixed”.
 - Follow **Reproduction-First Protocol** aggressively; if non-deterministic, **instrumentation diff** is mandatory.
 - Apply **Escalation Protocol** when hypotheses stay below **70%**.
+- **Stop gate:** substantive deliveries must include **Delivery Self-Check** and **Follow-Up Queue** as the final section (`delivery-structure-guard.mjs`).
 
 **Bug Investigation Dossier:** Write/update `.kodaelus/bugs/<slug>-dossier.md` with summary, repro steps, ranked hypotheses with evidence, instrumentation added, lurking/trigger tests, trace/log locations, open questions. Optional traces: `.kodaelus/bugs/<slug>/traces/`.
 
@@ -585,7 +596,8 @@ Bare **`use kodaelus suggest`** → ask which sub-mode (Issues vs Features) befo
 
 **Behavior:**
 
-- **Read-only**, no implementation (same as Prompt/Bug Investigation).
+- **Read-only**, no implementation (same as Prompt/Question), with a **narrow artifact carve-out**.
+- **Hook allowlist:** `mkdir` (shell) + Write/StrReplace under `.kodaelus/suggestions/**` only; all other mutating tools/shell remain denied.
 - **Hard cap:** 5 - 8 ranked items per response; decline to pad.
 - **Anti-fabrication:** No claim of "missing X" without grep/read proof X is not present under another name.
 - **Persist:** `.kodaelus/suggestions/<YYYY-MM-DD>-<issues|features>.md`; on rerun, diff against prior files in that directory and flag addressed items (use `diffPriorSuggestions` from SDK or `install/hooks/lib/suggestions-diff.mjs`).
@@ -634,10 +646,11 @@ Bare **`use kodaelus suggest`** → ask which sub-mode (Issues vs Features) befo
 - **Mutating** (same class as Main/Lite): may edit code/tests to fix failures introduced by the pending diff.
 - **Git:** read-only only (`git status`, `git diff`, `git log`). Never `git commit`, `git add`, or `gh`.
 - **Scope of review:** uncommitted + staged changes versus `HEAD`.
-- **Fix-and-rerun loop:** On suite failure, apply minimal fixes and re-run. Soft cap **3** fix-rerun cycles (cycle 0 = first full run; cycles 1-3 = fix then rerun). If still failing after 3 fix cycles (or about to start a 4th): **stop**, report failures and attempts, do **not** claim Ready, do **not** emit a proposed commit message.
+- **Fix-and-rerun loop:** On suite failure, apply minimal fixes and re-run. Soft cap **3** fix-rerun cycles (cycle 0 = first full run; cycles 1-3 = fix then rerun). Session metadata tracks suite attempts via `shell-evidence-recorder.mjs`. If still failing after 3 fix cycles (or about to start a 4th): **stop**, report failures and attempts, do **not** claim Ready, do **not** emit a proposed commit message. Hooks **deny product edits** until the user replies **`prepare continue`** / **`allow more fix cycles`** or exits Prepare.
 - **CI/CD guard:** If workflows, CI configs, or test scripts changed, verify coherence and run the CI-parity full suite (Test Discovery & CI Parity).
 - **AskQuestion:** resolve via Cursor clarifying questions resolution priority; AskQuestion deny applies when hooks fire.
 - **Follow-Up Queue:** omit when verdict is Ready; include when Not ready.
+- **Stop gates:** Ready vs Not ready verdict required (`delivery-structure-guard.mjs`); test-evidence soft-gate when Implementation occurred (`test-evidence-guard.mjs`).
 
 **Workflow (sequential):**
 
@@ -652,8 +665,8 @@ Bare **`use kodaelus suggest`** → ask which sub-mode (Issues vs Features) befo
 
 | From | To | Trigger |
 |------|-----|---------|
-| Prompt | Main | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `run it`, `execute` |
-| Bug Investigation | Main | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, `run it`, `execute` |
+| Prompt | Main | `use kodaelus`, `use kodaelus 0`, `use kodaelus main`, `run it`, standalone `execute` (whole line) |
+| Bug Investigation | Main | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, `run it`, standalone `execute` |
 | Suggest / Question | Main, Lite, or Prepare | `use kodaelus main`, `use kodaelus lite`, `use kodaelus prepare`, or Prompt first for a spec |
 | Lite | Main | `use kodaelus main` when scope grows |
 | Any | Prompt | `use kodaelus 1`, `p`, `prompt`, planner phrases |
@@ -662,6 +675,8 @@ Bare **`use kodaelus suggest`** → ask which sub-mode (Issues vs Features) befo
 | Any | Question | `use kodaelus q`, `question`, `5` |
 | Any | Lite | `use kodaelus lite`, `4`, `fast` |
 | Any | Prepare | `use kodaelus prepare`, `6`, `prep`, `prepare mode` |
+
+**Same-turn:** Upgrade phrases in the **current** user message take effect for that turn; do not wait for a follow-up message. Hooks persist the upgraded mode on `beforeSubmitPrompt` before any `preToolUse` read-only deny can fire. Recommended Prompt fences must include a **fence preamble** (upgrade line + blank line + activation-safe body) so a single paste upgrades. **Soft stickiness:** on an upgrade message, the agent must use the mutating mode response structure immediately (not another Prompt-mode Recommended-only reply).
 
 On **Bug Investigation → Main** for fix: treat the dossier + last **Recommended handoff prompt** as the task spec.
 
@@ -799,7 +814,7 @@ Do **not** use the full eight-section delivery structure for code work. Use:
 
 1. **Understanding**, goal, constraints, context.
 2. **Architecture decision preview**, rated forks (1 - 5) with confidence scores.
-3. **Recommended Kodaelus Prompt**, single fenced copy-paste block for Main-mode (or Bug Investigation when relevant) execution (must include **Ambiguity pre-emption** after the internal ambiguity pass).
+3. **Recommended Kodaelus Prompt**, single fenced copy-paste block for Main-mode (or Bug Investigation when relevant) execution (must include **Ambiguity pre-emption** after the internal ambiguity pass). **Fence preamble required:** first line = mutating upgrade phrase (`use kodaelus main` or appropriate handoff), blank line, then **activation-safe** spec body (mode display names only; no raw Prompt-mode activation phrases).
 4. **Why this prompt**, brief rationale.
 5. **Confidence**, per major claim.
 
@@ -813,7 +828,7 @@ Do **not** use the full Main delivery structure or ship fixes. Use:
 4. **Visibility plan**, what to capture on next occurrence (state, env, objects, call graph, timing, surrounding context).
 5. **Investigation actions**, repro attempts, instrumentation diffs, test stubs, headless/spectator setup (implement diagnostic code here if needed).
 6. **Bug Investigation Dossier**, path and summary of `.kodaelus/bugs/<slug>-dossier.md` (and optional traces directory).
-7. **Recommended handoff prompt**, fenced block for `use kodaelus bugfix` (Main mode) referencing dossier path.
+7. **Recommended handoff prompt**, fenced block that starts with **fence preamble** `use kodaelus bugfix`, blank line, then activation-safe Main-mode spec referencing the dossier path.
 8. **Follow-Up Queue** -> **Final section.** 1 - 5 related improvements (e.g. more instrumentation, extended repro, headless capture, dossier gaps, recommended `use kodaelus bugfix` scope). Use standard FU fields (ID, Title, Scope, Effort, Risk, Depends on, Confidence). **Do not end the response without this heading.**
 
 ### Prepare mode
@@ -832,7 +847,7 @@ Do **not** use the full Main delivery structure. Use:
 ## Done Criteria
 
 - **Follow-Up Queue** present as the **last section** of the response (Main / Bug Investigation substantive deliveries; Prepare when Not ready).
-- **Prompt mode:** Recommended prompts must pass the internal ambiguity check (**ambiguity pre-emption**) before emission.
+- **Prompt mode:** Recommended prompts must pass the internal ambiguity check (**ambiguity pre-emption**) before emission, use **activation-safe wording** in the spec body, and include a **fence preamble** (mutating upgrade line + blank line before the spec).
 - **Prepare mode:** activation phrases documented and tested; fix-rerun soft cap of **3** cycles respected; proposed commit message only when verdict is Ready; never create the git commit.
 
 - **Delivery tier** declared; **Delivery Self-Check** completed with no applicable Fail (Full/Standard tiers); no row Pass on claims below **70%** or missing inline Evidence.
