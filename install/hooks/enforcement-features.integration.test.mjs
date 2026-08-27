@@ -308,3 +308,29 @@ test("delivery-structure stop checks short final reports without 500-char pad", 
   assert.match(JSON.parse(stdout).followup_message, /Delivery Self-Check|Follow-Up Queue/);
   deactivateSession("conv-short-stop");
 });
+
+test("delivery-structure afterAgentResponse does not flag a long Plan-only first message", async () => {
+  activateSession("conv-plan-only", "main");
+  const planOnly = [
+    "## Plan",
+    "Delivery Tier: Full. File count: 8 files. Blast radius: src + tests.",
+    "Confidence: 88% | Evidence: `Cargo.toml` -> package name",
+    "x".repeat(1200),
+  ].join("\n");
+  const after = await runHook(deliveryHook, {
+    hook_event_name: "afterAgentResponse",
+    conversation_id: "conv-plan-only",
+    response: planOnly,
+  });
+  assert.equal(after.code, 0);
+  assert.equal(after.stdout, "{}");
+
+  const stopped = await runHook(deliveryHook, {
+    hook_event_name: "stop",
+    conversation_id: "conv-plan-only",
+    response: planOnly,
+  });
+  assert.equal(stopped.code, 2);
+  assert.match(JSON.parse(stopped.stdout).followup_message, /Follow-Up Queue|Delivery Self-Check/);
+  deactivateSession("conv-plan-only");
+});

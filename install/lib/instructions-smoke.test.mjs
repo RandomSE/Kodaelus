@@ -72,8 +72,12 @@ test("hook-absent contract heading sits after Purpose and before Hard Boundaries
     "hook-absent / Plan-first deny phrase missing",
   );
   assert.ok(
-    /length >= 500|final report of the turn/i.test(instructions),
-    "hook-absent must document final-report OR length >= 500 delivery structure",
+    /final report of the turn/i.test(instructions),
+    "hook-absent must require Full order on the final report of the turn",
+  );
+  assert.ok(
+    /Plan-first message is exempt/i.test(instructions),
+    "hook-absent must exempt Plan-first from the length >= 500 Full-order rule",
   );
 });
 

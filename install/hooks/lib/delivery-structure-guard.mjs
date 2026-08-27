@@ -1,10 +1,11 @@
 /**
  * Delivery section presence checks for Main / Bug / Prepare stop hooks.
  *
- * Progress may be one short sentence (or none). Any user-visible assistant
- * text that is the final report of the turn (stop) OR length >= 500 must use
- * Main Full section order with Follow-Up Queue last. Do not rename required
- * headings (Plan, Delivery Self-Check, Follow-Up Queue).
+ * Progress may be one short sentence (or none). The Plan-first message is
+ * exempt from the length >= 500 Full-structure rule. Only the final report
+ * of the turn (stop) must use Main Full section order with Follow-Up Queue
+ * last. Do not rename required headings (Plan, Delivery Self-Check,
+ * Follow-Up Queue).
  */
 
 const SELF_CHECK_RE = /##\s*Delivery Self-Check\b/i;

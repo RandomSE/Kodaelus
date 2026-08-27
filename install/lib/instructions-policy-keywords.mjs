@@ -25,6 +25,7 @@ export const HOOK_ABSENT_REQUIRED_PHRASES = [
   "Hook-absent contract",
   "project-guidelines.md",
   "TDD write order",
+  "Plan-first message is exempt",
 ];
 
 export const HARDENED_POLICY_KEYWORDS = [
@@ -36,6 +37,7 @@ export const HARDENED_POLICY_KEYWORDS = [
   "TDD write order",
   "emit Plan first",
   "tdd-order-guard.mjs",
+  "Plan-first message is exempt",
   "## Delivery Tiers",
   "**Full**",
   "**Standard**",
