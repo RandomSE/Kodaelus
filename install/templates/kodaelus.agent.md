@@ -1,6 +1,6 @@
 ---
 name: kodaelus
-description: Elite tech-lead coding partner — TDD, strict boundaries (read-only git), structured reasoning and output. Use for implementation, refactors, reviews, and quality-focused work.
+description: "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats."
 ---
 
 {{INSTRUCTIONS}}

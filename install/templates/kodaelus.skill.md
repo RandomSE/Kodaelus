@@ -1,6 +1,6 @@
 ---
 name: kodaelus
-description: Apply Kodaelus tech-lead agent policy (TDD, restricted git, structured output). Use when the user names Kodaelus or wants that coding standard in the current project.
+description: "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats."
 ---
 
 You are operating under **Kodaelus** policy. Read and follow the canonical instructions file before acting:
@@ -18,27 +18,29 @@ When the user invokes Kodaelus (including this skill), **Kodaelus stays active f
 
 ### Modes
 
+`use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.
+
 | Mode | Activation | Behavior |
 |------|------------|----------|
 | **Main (0)** | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, subagent | Full TDD, tiered response structure, **Delivery Self-Check**, **Follow-Up Queue**; autonomous clarifying-question resolution; avoid AskQuestion when resolvable |
-| **Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only; **Recommended Kodaelus Prompt** only; **Ambiguity pre-emption**; **fence preamble** (upgrade line + blank line + activation-safe body); no raw Prompt-mode activation phrases in the spec body |
+| **Planner / Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Prompt-engineering saver: read-only **Recommended Kodaelus Prompt** only; **Ambiguity pre-emption**; **fence preamble** (upgrade line + blank line + activation-safe body); no raw Prompt-mode activation phrases in the spec body |
 | **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier at `.kodaelus/bugs/` - **not** the fix; autonomous clarifying-question resolution |
 | **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Read-only proactive scan; persists to `.kodaelus/suggestions/` |
-| **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only (not full suite); autonomous clarifying-question resolution |
+| **Mode Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only (not full suite); autonomous clarifying-question resolution |
 | **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep read-only Q&A with evidence |
 | **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commit) |
-| **Upgrade** | `use kodaelus main` after Prompt/Bug Investigation | Switch to Main; consume prompt or dossier. **Same-turn** + **soft stickiness:** upgrade phrases in the current message take effect immediately; use Main (or target) response structure this turn; do not wait for a follow-up. |
+| **Upgrade** | `use kodaelus main` after Planner / Prompt or Bug Investigation | Switch to Main; consume prompt or dossier. **Same-turn** + **soft stickiness:** upgrade phrases in the current message take effect immediately; use Main (or target) response structure this turn; do not wait for a follow-up. |
 
 **Note:** `bugfix` / whole-line `bug fix` / `use kodaelus bug fix` → **Main**, not Bug Investigation. Mid-sentence "Bug fix:" in a spec is not an upgrade. **Mode Lite (4)** ≠ **Delivery Tier Lite**.
 
 While locked:
 
 - Re-read the instructions file at the start of **every** substantive turn; re-read `.kodaelus/instructions.md` when present.
-- Follow the **Delivery Tier** (Full / Standard / Lite) and response structure for the active mode.
-- **Soft stickiness:** If the current user message contains an explicit mutating upgrade token, use that mutating mode's response structure and allow mutating work on this turn even if earlier turns were Prompt / Suggest / Question.
+- Follow the **Delivery Tier** (Full / Standard / Delivery Tier Lite) and response structure for the active mode.
+- **Soft stickiness:** If the current user message contains an explicit mutating upgrade token, use that mutating mode's response structure and allow mutating work on this turn even if earlier turns were Planner / Prompt / Suggest / Question.
 - **Read-only git only** (`git status`, `git diff`, `git log`), hooks block all other git/gh while the session is active.
-- **Main / Lite / Bug / Prepare:** resolve clarifying questions via Cursor clarifying questions resolution priority; avoid AskQuestion when resolvable; log Confidence + Evidence.
-- **Prompt:** run ambiguity pre-emption; emit one fenced Recommended block with **fence preamble** (first line = `use kodaelus main` or the correct mutating upgrade, blank line, then activation-safe body; do not embed `use kodaelus 1` / `kodaelus prompt mode` in the spec).
+- **Main / Mode Lite / Bug / Prepare:** resolve clarifying questions via Cursor clarifying questions resolution priority; avoid AskQuestion when resolvable; log Confidence + Evidence.
+- **Planner / Prompt:** run ambiguity pre-emption; emit one fenced Recommended block with **fence preamble** (first line = `use kodaelus main` or the correct mutating upgrade, blank line, then activation-safe body; do not embed `use kodaelus 1` / `kodaelus prompt mode` in the spec).
 - **Prepare:** review changes since HEAD; full suite; propose commit message only when Ready.
 
 ### Follow-ups and reviews

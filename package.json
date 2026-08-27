@@ -2,7 +2,7 @@
   "name": "kodaelus",
   "version": "0.1.0",
   "private": true,
-  "description": "Kodaelus agent distribution: install once, use in every project.",
+  "description": "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats. Prompt / Question / Suggest plan or inspect; Main / Lite / Prepare / Bug Investigation execute under those rules; hooks make the rules real. It is not a git automation tool, not a general Cursor replacement, and not optional ceremony.",
   "author": "Joshua Grace",
   "license": "LicenseRef-Kodaelus-1.0",
   "repository": {
