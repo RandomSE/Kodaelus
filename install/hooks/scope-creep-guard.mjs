@@ -31,11 +31,13 @@ import {
 } from "./lib/session-store.mjs";
 import {
   denyBugModeWrite,
+  denyPlanFirst,
   denyPrepareFixCycle,
   denyReadOnlyTool,
   denySuggestArtifactWrite,
   isMutatingToolName,
 } from "./lib/mode-guard.mjs";
+import { isCloudOrHeadlessRuntime } from "./lib/cloud-runtime.mjs";
 
 async function readInput() {
   const chunks = [];
@@ -226,6 +228,17 @@ try {
 
     if (editPaths.length === 0) {
       allowTool();
+    }
+
+    if (
+      mode === "main" &&
+      isCloudOrHeadlessRuntime() &&
+      isMutatingToolName(toolName)
+    ) {
+      const meta = getSessionMetadata(conversationId);
+      if (meta && meta.planFileEstimate == null) {
+        denyWith(denyPlanFirst());
+      }
     }
 
     const projectRoot = resolveProjectRoot(input, editPaths[0]);

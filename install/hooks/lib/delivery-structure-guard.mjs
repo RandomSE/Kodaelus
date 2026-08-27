@@ -1,11 +1,32 @@
 /**
  * Delivery section presence checks for Main / Bug / Prepare stop hooks.
+ *
+ * Progress may be one short sentence (or none). The Plan-first message is
+ * exempt from the length >= 500 Full-structure rule. Only the final report
+ * of the turn (stop) must use Main Full section order with Follow-Up Queue
+ * last. Do not rename required headings (Plan, Delivery Self-Check,
+ * Follow-Up Queue).
  */
 
 const SELF_CHECK_RE = /##\s*Delivery Self-Check\b/i;
 const FOLLOW_UP_RE = /##\s*Follow-Up Queue\b/i;
 const PREPARE_VERDICT_RE =
   /##\s*(?:Prepare\s+)?(?:Verdict|Ready(?:\s+vs\s+Not ready)?)\b|\bVerdict\s*:\s*(?:Ready|Not ready)\b/i;
+const DELIVERY_TIER_RE = /\bDelivery\s+Tier\b/i;
+const DELIVERY_TIER_CONFIDENCE_RE =
+  /Delivery\s+Tier[\s\S]{0,240}?Confidence:\s*\d{1,3}%[^\n]{0,120}Evidence:/i;
+
+/**
+ * Delivery Tier line must include Confidence: NN% | Evidence: (stop-check).
+ * Does not change the Confidence keyword itself.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function hasDeliveryTierConfidenceEvidence(text) {
+  if (typeof text !== "string" || !DELIVERY_TIER_RE.test(text)) return false;
+  return DELIVERY_TIER_CONFIDENCE_RE.test(text);
+}
 
 /**
  * @param {string} text
@@ -67,6 +88,10 @@ export function findMissingDeliverySections(mode, text, options = {}) {
     else if (!isFollowUpQueueFinalSection(body)) {
       missing.push("Follow-Up Queue (must be final section)");
     }
+  }
+
+  if (mode === "main" && DELIVERY_TIER_RE.test(body) && !hasDeliveryTierConfidenceEvidence(body)) {
+    missing.push("Delivery Tier Confidence: NN% | Evidence:");
   }
 
   if (mode === "prepare") {

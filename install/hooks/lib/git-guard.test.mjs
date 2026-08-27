@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ALLOWED_GIT_SUBCOMMANDS,
   isBlockedGitShellCommand,
+  isCloudDeliveryAllowedGitCommand,
 } from "./git-guard.mjs";
 
 const allow = (command) =>
@@ -50,4 +51,40 @@ test("allows non-git shell commands", () => {
   allow("npm test");
   allow("node install/install.mjs");
   allow("echo git commit");
+});
+
+test("cloudDelivery allowlist permits branch/add/commit/push and gh pr create", () => {
+  const cloudAllow = (command) =>
+    assert.equal(
+      isBlockedGitShellCommand(command, { cloudDelivery: true }),
+      false,
+      `expected cloud allow: ${command}`,
+    );
+  const cloudDeny = (command) =>
+    assert.equal(
+      isBlockedGitShellCommand(command, { cloudDelivery: true }),
+      true,
+      `expected cloud deny: ${command}`,
+    );
+
+  cloudAllow("git status");
+  cloudAllow("git branch commit-11");
+  cloudAllow("git checkout -b commit-11");
+  cloudAllow("git add README.md");
+  cloudAllow("git commit -m msg");
+  cloudAllow("git push -u origin commit-11");
+  cloudAllow("gh pr create --title t --body b");
+  assert.equal(isCloudDeliveryAllowedGitCommand("git commit -m msg"), true);
+
+  cloudDeny("git reset --hard");
+  cloudDeny("git config user.email x");
+  cloudDeny("git push --force");
+  cloudDeny("git push --force-with-lease");
+  cloudDeny("gh pr merge");
+  cloudDeny("gh auth login");
+});
+
+test("IDE default still blocks mutating git including gh pr create", () => {
+  deny("gh pr create");
+  deny("git commit -m msg");
 });

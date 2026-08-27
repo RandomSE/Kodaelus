@@ -136,6 +136,10 @@ Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scann
 
 The SDK is for **programmatic runs with policy preloaded**, not a full replacement for IDE hooks. Use Cursor with Kodaelus active when you need hard safety guards.
 
+### Cursor cloud and SDK (no IDE hooks)
+
+Cursor cloud agents and SDK `runKodaelus` do not load `~/.cursor/hooks.json`, so dash, confidence, structure, and git guards never fire. The **Hook-absent contract** in `kodaelus/instructions.md` (`## Hook-absent contract (cloud / SDK)`) still applies: Plan before the first mutating write (`emit Plan first`), TDD write order including a failing test run before impl, honor-system dash / confidence / AskQuestion / deletion rules. Progress may be one short sentence. The Plan-first message is exempt from the length >= 500 Full-order rule. Only the final report of the turn uses Main Full section order. Cloud and SDK runners may commit when the platform must ship; Cursor IDE remains git-read-only via hooks.
+
 **Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks (needed for `block-readonly-shell`, `ask-question-guard`, and other new hooks). Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent — it should be denied — then **`stop kodaelus`**. If a long `use kodaelus main` paste stays read-only, confirm the activation line is first, then re-run install:global.
 
 ### Architecture Improvement Review

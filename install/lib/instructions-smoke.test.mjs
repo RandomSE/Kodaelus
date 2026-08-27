@@ -51,6 +51,43 @@ test("canonical purpose is identical in README, package.json, and instructions.m
   assert.ok(purposeIdx >= 0 && purposeIdx < boundsIdx, "Purpose must precede Hard Boundaries");
 });
 
+test("hook-absent contract heading sits after Purpose and before Hard Boundaries", () => {
+  const heading = "## Hook-absent contract (cloud / SDK)";
+  const purposeIdx = instructions.indexOf("## Purpose & operating model");
+  const hookIdx = instructions.indexOf(heading);
+  const boundsIdx = instructions.indexOf("## Hard Boundaries");
+  assert.ok(hookIdx >= 0, "missing ## Hook-absent contract (cloud / SDK)");
+  assert.ok(
+    purposeIdx < hookIdx && hookIdx < boundsIdx,
+    "Hook-absent contract must sit after Purpose & operating model and before Hard Boundaries",
+  );
+  assert.ok(instructions.includes("Hook-absent contract"), "missing phrase Hook-absent contract");
+  assert.ok(
+    instructions.includes("project-guidelines.md"),
+    "missing phrase project-guidelines.md",
+  );
+  assert.ok(instructions.includes("TDD write order"), "missing TDD write-order rule");
+  assert.ok(
+    instructions.includes("emit Plan first"),
+    "hook-absent / Plan-first deny phrase missing",
+  );
+  assert.ok(
+    /final report of the turn/i.test(instructions),
+    "hook-absent must require Full order on the final report of the turn",
+  );
+  assert.ok(
+    /Plan-first message is exempt/i.test(instructions),
+    "hook-absent must exempt Plan-first from the length >= 500 Full-order rule",
+  );
+});
+
+test("README points cloud/SDK readers at the hook-absent contract", () => {
+  assert.ok(
+    readme.includes("Hook-absent contract"),
+    "README should mention Hook-absent contract for cloud/SDK sessions without IDE hooks",
+  );
+});
+
 test("install one-liners state the same job", () => {
   assert.ok(agent.includes(INSTALL_JOB_ONELINER), "agent description missing job one-liner");
   assert.ok(skill.includes(INSTALL_JOB_ONELINER), "skill description missing job one-liner");

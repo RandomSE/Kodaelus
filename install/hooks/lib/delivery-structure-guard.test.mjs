@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildDeliveryStructureFollowup,
   findMissingDeliverySections,
+  hasDeliveryTierConfidenceEvidence,
   isFollowUpQueueFinalSection,
 } from "./delivery-structure-guard.mjs";
 
@@ -77,5 +78,20 @@ test("buildDeliveryStructureFollowup mentions mode", () => {
   assert.match(
     buildDeliveryStructureFollowup(["Delivery Self-Check"], "main"),
     /main/,
+  );
+});
+
+test("Delivery Tier line must include Confidence: NN% | Evidence:", () => {
+  const withEvidence =
+    "Delivery Tier: Full. Confidence: 90% | Evidence: `npm test` -> pass\n" + mainOk;
+  assert.equal(hasDeliveryTierConfidenceEvidence(withEvidence), true);
+  assert.deepEqual(findMissingDeliverySections("main", withEvidence), []);
+
+  const bareTier = "## Plan\nDelivery Tier: Full\n" + mainOk.split("\n").slice(1).join("\n");
+  assert.equal(hasDeliveryTierConfidenceEvidence(bareTier), false);
+  assert.ok(
+    findMissingDeliverySections("main", bareTier).some((m) =>
+      m.includes("Confidence: NN% | Evidence:"),
+    ),
   );
 });
