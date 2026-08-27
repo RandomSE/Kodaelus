@@ -17,9 +17,23 @@ export const CORE_POLICY_KEYWORDS = [
   "Entry-point detection",
 ];
 
+/** Locked heading for sessions that cannot load ~/.cursor/hooks.json. */
+export const HOOK_ABSENT_HEADING = "## Hook-absent contract (cloud / SDK)";
+
+/** Phrases the hook-absent / greenfield policy must spell out (smoke + helper). */
+export const HOOK_ABSENT_REQUIRED_PHRASES = [
+  "Hook-absent contract",
+  "project-guidelines.md",
+  "TDD write order",
+];
+
 export const HARDENED_POLICY_KEYWORDS = [
   "## Purpose & operating model",
   CANONICAL_PURPOSE,
+  HOOK_ABSENT_HEADING,
+  "Hook-absent contract",
+  "project-guidelines.md",
+  "TDD write order",
   "## Delivery Tiers",
   "**Full**",
   "**Standard**",
@@ -118,6 +132,34 @@ export function findMissingPolicyKeywords(content) {
 
 /**
  * @param {string} content
+ * @returns {string[]} errors
+ */
+export function checkHookAbsentContract(content) {
+  const errors = [];
+  const purposeIdx = content.indexOf("## Purpose & operating model");
+  const hookIdx = content.indexOf(HOOK_ABSENT_HEADING);
+  const boundsIdx = content.indexOf("## Hard Boundaries");
+
+  if (hookIdx < 0) {
+    errors.push(`missing heading: ${HOOK_ABSENT_HEADING}`);
+  }
+  if (purposeIdx < 0 || boundsIdx < 0) {
+    errors.push("missing Purpose or Hard Boundaries headings");
+  } else if (hookIdx >= 0 && !(purposeIdx < hookIdx && hookIdx < boundsIdx)) {
+    errors.push(
+      "Hook-absent contract heading must sit after Purpose & operating model and before Hard Boundaries",
+    );
+  }
+  for (const phrase of HOOK_ABSENT_REQUIRED_PHRASES) {
+    if (!content.includes(phrase)) {
+      errors.push(`missing phrase: ${phrase}`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * @param {string} content
  * @param {number} [minLength=5000]
  */
 export function validateInstructionsPolicy(content, minLength = 5000) {
@@ -129,5 +171,6 @@ export function validateInstructionsPolicy(content, minLength = 5000) {
   for (const keyword of missing) {
     errors.push(`missing keyword: ${keyword}`);
   }
+  errors.push(...checkHookAbsentContract(content));
   return errors;
 }
