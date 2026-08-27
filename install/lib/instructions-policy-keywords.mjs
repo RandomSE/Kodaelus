@@ -1,5 +1,13 @@
 /** Shared policy keywords validated by install smoke tests and SDK instructions tests. */
 
+/** Canonical 3-sentence purpose. Same text in README, package.json, and instructions.md. */
+export const CANONICAL_PURPOSE =
+  "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats. Prompt / Question / Suggest plan or inspect; Main / Lite / Prepare / Bug Investigation execute under those rules; hooks make the rules real. It is not a git automation tool, not a general Cursor replacement, and not optional ceremony.";
+
+/** Install-time description one-liner (agent, skill, session rule). First sentence of CANONICAL_PURPOSE. */
+export const INSTALL_JOB_ONELINER =
+  "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats.";
+
 export const CORE_POLICY_KEYWORDS = [
   "## Task-Type Workflows",
   "## File Deletion Protocol",
@@ -10,6 +18,8 @@ export const CORE_POLICY_KEYWORDS = [
 ];
 
 export const HARDENED_POLICY_KEYWORDS = [
+  "## Purpose & operating model",
+  CANONICAL_PURPOSE,
   "## Delivery Tiers",
   "**Full**",
   "**Standard**",

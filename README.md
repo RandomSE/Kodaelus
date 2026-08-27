@@ -1,6 +1,8 @@
 # Kodaelus
 
-Elite coding agent for Cursor IDE and the [Cursor SDK](https://cursor.com/docs/sdk/typescript). **Install once**, use in **every project** — no need to copy this repo into each workspace.
+Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats. Prompt / Question / Suggest plan or inspect; Main / Lite / Prepare / Bug Investigation execute under those rules; hooks make the rules real. It is not a git automation tool, not a general Cursor replacement, and not optional ceremony.
+
+**Install once**, use in **every project** -- no need to copy this repo into each workspace. Works with Cursor IDE and the [Cursor SDK](https://cursor.com/docs/sdk/typescript).
 
 **License:** You may install and use Kodaelus for your own development. You may **not** redistribute, resell, or sublicense it. See [LICENSE](LICENSE). Kodaelus is **not** affiliated with Cursor; see [TRADEMARKS.md](TRADEMARKS.md).
 
@@ -62,20 +64,34 @@ Supplemental guidelines for this repository. Read together with global Kodaelus 
 - Staging API base URL is in `.env.example` as `STAGING_API_URL`.
 ```
 
+### When to say what
+
+Pick the mode that matches your intent, then say the activation phrase.
+
+- **Paste-ready spec** (the prompt-engineering saver) -> **Planner / Prompt (1)** (`use kodaelus prompt`)
+- **Do the work** -> **Main (0)** (`use kodaelus`)
+- **Hard bug, do not patch yet** -> **Bug Investigation (2)** (`use kodaelus bug`)
+- **Tiny edit** -> **Mode Lite (4)** (`use kodaelus lite`)
+- **About to commit** -> **Prepare (6)** (`use kodaelus prepare`)
+- **What's wrong / what to build** -> **Suggest (3)** (`use kodaelus suggest`)
+- **Just explain** -> **Question (5)** (`use kodaelus question`)
+
 ### Modes
+
+`use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.
 
 | Mode | Say | What you get |
 |------|-----|--------------|
 | **Main (0)** | `use kodaelus`, `use kodaelus main`, `use kodaelus bugfix` | Full TDD implementation |
-| **Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only handoff prompt |
-| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier — not the fix |
+| **Planner / Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Read-only paste-ready spec; the prompt-engineering saver |
+| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier -- not the fix |
 | **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Proactive audit or roadmap scan (read-only) |
-| **Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only |
+| **Mode Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only |
 | **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep research Q&A (read-only) |
 | **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commits) |
 | **Upgrade** | `run it`, `execute`, `use kodaelus main` | Switch to Main; consume dossier/prompt |
 
-**Mode Lite (4)** is an activation phrase for fast edits. **Delivery Tier Lite** is a shorter section set within a mode — they are different concepts.
+**Mode Lite (4)** is an activation phrase for fast edits. **Delivery Tier Lite** is a shorter section set within a mode -- they are different concepts.
 
 `bugfix` / `bug fix` → **Main**, not Bug Investigation. After investigation, say **`use kodaelus bugfix`** to fix using the dossier at `.kodaelus/bugs/`.
 
@@ -209,3 +225,5 @@ import {
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
 
 This repository may be **public** or **private** on GitHub. Either way, downstream users receive only the rights in LICENSE - not ownership or redistribution rights.
+
+The name **Kodaelus** combines Koda and Daedalus. That etymology is a footnote, not the product.

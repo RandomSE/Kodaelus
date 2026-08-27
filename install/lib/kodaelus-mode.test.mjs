@@ -130,3 +130,9 @@ test("execute: whole-line execute upgrades; prose execute does not", () => {
     "prompt",
   );
 });
+
+test("display names do not activate: Planner / Prompt, Main mode (0), Mode Lite (4)", () => {
+  assert.equal(detectKodaelusMode("Planner / Prompt mode (1). Read-only spec."), null);
+  assert.equal(detectKodaelusMode("Main mode (0). Bug fix. TDD."), null);
+  assert.equal(detectKodaelusMode("Mode Lite (4) for a tiny edit."), null);
+});
