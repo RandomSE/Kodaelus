@@ -52,7 +52,7 @@ try {
     allowEmpty();
   }
 
-  if (!isSubstantiveResponse(text)) {
+  if (!isSubstantiveResponse(text, 500, { event })) {
     allowEmpty();
   }
 

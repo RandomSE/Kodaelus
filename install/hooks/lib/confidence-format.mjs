@@ -22,8 +22,15 @@ export function findConfidenceViolations(text) {
 /**
  * @param {string} text
  * @param {number} [minLength=500]
+ * @param {{ event?: string, finalReport?: boolean }} [options]
  * @returns {boolean}
  */
-export function isSubstantiveResponse(text, minLength = 500) {
-  return typeof text === "string" && text.trim().length >= minLength;
+export function isSubstantiveResponse(text, minLength = 500, options = {}) {
+  if (typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  // Progress may be one short sentence (or none). Final report of the turn
+  // (stop) OR length >= minLength must use Main Full section order.
+  if (options.finalReport === true || options.event === "stop") return true;
+  return trimmed.length >= minLength;
 }

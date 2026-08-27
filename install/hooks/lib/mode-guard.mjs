@@ -111,3 +111,16 @@ export function denyPrepareFixCycle(relativePath, fixCycleCount) {
       "Force Not ready; no proposed commit message. User may reply prepare continue.",
   };
 }
+
+/**
+ * @returns {{ permission: 'deny', user_message: string, agent_message: string }}
+ */
+export function denyPlanFirst() {
+  return {
+    permission: "deny",
+    user_message:
+      "Kodaelus Plan-first: emit Plan with a file-count estimate before mutating writes (headless/cloud).",
+    agent_message:
+      "emit Plan first (Delivery Tier, file count, blast radius, test command, Confidence: NN% | Evidence:) before Write/StrReplace/ApplyPatch/Delete. Do not wait for scope approved when no Plan has been emitted yet.",
+  };
+}

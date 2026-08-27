@@ -72,5 +72,9 @@ test("tool name helpers", () => {
   assert.equal(isWriteOrStrReplaceTool("ApplyPatch"), false);
   assert.equal(isWriteStrReplaceOrPatchTool("ApplyPatch"), true);
   assert.equal(isTestOrSpecPath("a.test.js"), true);
+  assert.equal(isTestOrSpecPath("tests/engine.rs"), true);
+  assert.equal(isTestOrSpecPath("tests/matching/mod.rs"), true);
+  assert.equal(isTestOrSpecPath("src/engine.rs"), false);
+  assert.equal(isTestOrSpecPath("src/foo_test.rs"), true);
   assert.equal(isDiagnosticInstrumentationPath("diag/out.log"), true);
 });

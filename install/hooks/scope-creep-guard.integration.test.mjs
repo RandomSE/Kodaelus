@@ -21,10 +21,12 @@ let tempHome;
 test.beforeEach(() => {
   tempHome = mkdtempSync(join(tmpdir(), "kodaelus-scope-home-"));
   process.env.CURSOR_HOME = tempHome;
+  process.env.KODAELUS_CLOUD_DELIVERY = "0";
 });
 
 test.afterEach(() => {
   delete process.env.CURSOR_HOME;
+  delete process.env.KODAELUS_CLOUD_DELIVERY;
   rmSync(tempHome, { recursive: true, force: true });
 });
 
@@ -118,4 +120,35 @@ test("beforeSubmitPrompt unlocks scope", async () => {
   assert.equal(meta?.scopeApproved, true);
 
   deactivateSession("conv-unlock");
+});
+
+test("cloud/headless Main denies Write with emit Plan first when no Plan estimate", async () => {
+  process.env.KODAELUS_CLOUD_DELIVERY = "1";
+  activateSession("conv-plan-first", "main");
+
+  const { stdout } = await runHook({
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-plan-first",
+    tool_name: "Write",
+    tool_input: { path: "src/lib.rs" },
+    workspace_roots: [tempHome],
+  });
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.permission, "deny");
+  assert.match(result.agent_message, /emit Plan first/i);
+  assert.doesNotMatch(result.user_message, /scope approved/i);
+
+  setPlanFileEstimate("conv-plan-first", 4);
+  const allowed = await runHook({
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-plan-first",
+    tool_name: "Write",
+    tool_input: { path: "src/lib.rs" },
+    workspace_roots: [tempHome],
+  });
+  assert.deepEqual(JSON.parse(allowed.stdout), { permission: "allow" });
+
+  deactivateSession("conv-plan-first");
+  process.env.KODAELUS_CLOUD_DELIVERY = "0";
 });

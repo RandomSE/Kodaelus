@@ -48,6 +48,10 @@
       {
         "command": "node ./hooks/ask-question-guard.mjs",
         "matcher": "AskQuestion|AskUserQuestion"
+      },
+      {
+        "command": "node ./hooks/tdd-order-guard.mjs",
+        "matcher": "Write|StrReplace|ApplyPatch"
       }
     ],
     "postToolUse": [
@@ -114,6 +118,10 @@
       },
       {
         "command": "node ./hooks/ask-question-guard.mjs",
+        "loop_limit": 2
+      },
+      {
+        "command": "node ./hooks/tdd-order-guard.mjs",
         "loop_limit": 2
       }
     ],

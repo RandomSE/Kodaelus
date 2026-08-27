@@ -11,9 +11,11 @@ import {
 import {
   getSessionMode,
   isSessionActive,
+  recordFirstFailingTest,
   recordPrepareSuiteAttempt,
   recordShellEvidence,
 } from "./lib/session-store.mjs";
+import { isFailingTestOutcome } from "./lib/tdd-order-guard.mjs";
 
 async function readInput() {
   const chunks = [];
@@ -47,6 +49,7 @@ const outcome =
   exitCode === "" || exitCode == null
     ? `${input.outcome ?? input.result ?? ""}`.slice(0, 200)
     : `exit=${exitCode}`;
+const stdout = `${input.output ?? input.stdout ?? input.std_out ?? ""}`.slice(0, 8000);
 
 try {
   if (!isSessionActive(conversationId)) {
@@ -57,6 +60,9 @@ try {
 
   if (isTestLikeShellCommand(command) && (mode === "main" || mode === "prepare" || mode === "lite" || mode === "bug")) {
     recordShellEvidence(conversationId, command, outcome);
+    if (isFailingTestOutcome(outcome)) {
+      recordFirstFailingTest(conversationId, { command, outcome, stdout });
+    }
   }
 
   if (mode === "prepare" && isFullSuiteShellCommand(command)) {

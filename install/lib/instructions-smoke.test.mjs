@@ -67,6 +67,14 @@ test("hook-absent contract heading sits after Purpose and before Hard Boundaries
     "missing phrase project-guidelines.md",
   );
   assert.ok(instructions.includes("TDD write order"), "missing TDD write-order rule");
+  assert.ok(
+    instructions.includes("emit Plan first"),
+    "hook-absent / Plan-first deny phrase missing",
+  );
+  assert.ok(
+    /length >= 500|final report of the turn/i.test(instructions),
+    "hook-absent must document final-report OR length >= 500 delivery structure",
+  );
 });
 
 test("README points cloud/SDK readers at the hook-absent contract", () => {

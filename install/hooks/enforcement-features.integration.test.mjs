@@ -40,6 +40,7 @@ test.beforeEach(() => {
   tempHome = mkdtempSync(join(tmpdir(), "kodaelus-enforce-home-"));
   tempProject = mkdtempSync(join(tmpdir(), "kodaelus-enforce-project-"));
   process.env.CURSOR_HOME = tempHome;
+  process.env.KODAELUS_CLOUD_DELIVERY = "0";
   writeFileSync(
     join(tempProject, "package.json"),
     JSON.stringify({ name: "tmp", main: "index.js" }),
@@ -50,6 +51,7 @@ test.beforeEach(() => {
 
 test.afterEach(() => {
   delete process.env.CURSOR_HOME;
+  delete process.env.KODAELUS_CLOUD_DELIVERY;
   rmSync(tempHome, { recursive: true, force: true });
   rmSync(tempProject, { recursive: true, force: true });
 });
@@ -293,4 +295,16 @@ test("7: test-evidence soft-gate and shell evidence recorder", async () => {
   assert.equal(ok.code, 0);
 
   deactivateSession("conv-evidence");
+});
+
+test("delivery-structure stop checks short final reports without 500-char pad", async () => {
+  activateSession("conv-short-stop", "main");
+  const { code, stdout } = await runHook(deliveryHook, {
+    hook_event_name: "stop",
+    conversation_id: "conv-short-stop",
+    response: "## Plan\nonly a short final report",
+  });
+  assert.equal(code, 2);
+  assert.match(JSON.parse(stdout).followup_message, /Delivery Self-Check|Follow-Up Queue/);
+  deactivateSession("conv-short-stop");
 });

@@ -1,8 +1,24 @@
 /** Read-only git subcommands permitted while Kodaelus is active. */
 export const ALLOWED_GIT_SUBCOMMANDS = new Set(["status", "diff", "log"]);
 
+/** Extra git subcommands allowed only for cloudDelivery ship (no force/reset/config). */
+export const CLOUD_DELIVERY_GIT_SUBCOMMANDS = new Set([
+  "status",
+  "diff",
+  "log",
+  "branch",
+  "add",
+  "commit",
+  "push",
+  "checkout",
+  "switch",
+]);
+
 const GH_COMMAND =
   /(^|[\s;&|])gh\s+(auth|repo|pr|issue|release|workflow)\b/i;
+const GH_PR_CREATE = /(^|[\s;&|])gh\s+pr\s+create\b/i;
+const GIT_FORCE = /\s(?:--force|--force-with-lease)(?:\s|$)/i;
+const GIT_SHORT_FORCE_PUSH = /(^|[\s;&|])git\b[\s\S]*\bpush\b[\s\S]*\s-f(?:\s|$)/i;
 
 /** Git CLI options that consume the next token as a value. */
 const GIT_OPT_WITH_ARG = new Set([
@@ -90,11 +106,62 @@ function gitSubcommandsInSegment(segment) {
 }
 
 /**
+ * @param {string} command
+ * @param {string | null} sub
+ * @returns {boolean}
+ */
+function isDangerousCloudGit(command, sub) {
+  if (sub === "reset" || sub === "config" || sub === "rebase" || sub === "clean") {
+    return true;
+  }
+  if (GIT_FORCE.test(command) || GIT_SHORT_FORCE_PUSH.test(command)) return true;
+  if (sub === "branch" && /(?:\s-D\b|\s--delete\b)/.test(command)) return true;
+  if (sub === "checkout" && !/(?:^|\s)(?:-b|-B|--orphan)\b/.test(command)) return true;
+  if (sub === "switch" && !/(?:^|\s)(?:-c|--create)\b/.test(command)) return true;
+  return false;
+}
+
+/**
+ * Cloud/SDK ship allowlist: branch/add/commit/push and gh pr create.
+ * No force/reset/config. IDE callers must not use this path.
+ *
+ * @param {string} command
+ * @returns {boolean}
+ */
+export function isCloudDeliveryAllowedGitCommand(command) {
+  if (typeof command !== "string" || command.length === 0) return false;
+  if (GH_COMMAND.test(command)) {
+    return GH_PR_CREATE.test(command);
+  }
+
+  let sawGit = false;
+  for (const segment of splitShellSegments(command)) {
+    const subcommands = gitSubcommandsInSegment(segment);
+    if (subcommands.length === 0) continue;
+    sawGit = true;
+    for (const sub of subcommands) {
+      if (sub === null || !CLOUD_DELIVERY_GIT_SUBCOMMANDS.has(sub)) return false;
+      if (isDangerousCloudGit(command, sub)) return false;
+    }
+  }
+  return sawGit;
+}
+
+/**
  * True when the shell command must be denied during an active Kodaelus session.
  * Allows read-only git: status, diff, log. Blocks all other git and gh subcommands.
+ * When options.cloudDelivery is true, also allows branch/add/commit/push and gh pr create.
+ *
+ * @param {string} command
+ * @param {{ cloudDelivery?: boolean }} [options]
  */
-export function isBlockedGitShellCommand(command) {
+export function isBlockedGitShellCommand(command, options = {}) {
   if (typeof command !== "string" || command.length === 0) return false;
+  if (options.cloudDelivery === true) {
+    const ideBlocked = isBlockedGitShellCommand(command, {});
+    if (!ideBlocked) return false;
+    return !isCloudDeliveryAllowedGitCommand(command);
+  }
   if (GH_COMMAND.test(command)) return true;
 
   for (const segment of splitShellSegments(command)) {

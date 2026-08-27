@@ -36,11 +36,14 @@ Treat hooks as absent when any of these is true:
 
 ### Self-enforcement (required)
 
-1. **Plan first.** Emit **Plan** (Delivery Tier, file count, blast radius, test command, `Confidence: NN% | Evidence: ...`) as the first assistant text before ANY mutating Write, StrReplace, ApplyPatch, or Delete.
-2. **TDD write order.** For new behavior, the first new `*.test.*` / `*_test.*` / `tests/**` / `*.spec.*` file (or a failing test in an existing test file) is committed to the workspace BEFORE product implementation files for that behavior. Parallel batching of tests and impl in one step is a policy violation; if it happened, **Delivery Self-Check** for that row is **Fail**.
-3. **Final structure.** The final substantive message still uses the full Main response structure with **Follow-Up Queue** last.
-4. **Honor-system guards.** Dash ban, Confidence|Evidence format, no AskQuestion in mutating modes, and File Deletion Protocol still apply when hooks are absent.
-5. **Git.** IDE hooks still block mutating git. Cloud/SDK platform may commit to ship. Use this exception only when the runtime is a cloud agent or SDK runner, not in Cursor IDE.
+1. **Plan first.** Emit **Plan** (Delivery Tier, file count, blast radius, test command, `Confidence: NN% | Evidence: ...`) as the first assistant text before ANY mutating Write, StrReplace, ApplyPatch, or Delete. On headless/cloud, hooks deny with **emit Plan first** when no Plan file-count estimate exists yet (do not wait for `scope approved`).
+2. **TDD write order.** For new behavior, the first new `*.test.*` / `*_test.*` / `tests/**` / `*.spec.*` file (or a failing test in an existing test file) is committed to the workspace BEFORE product implementation files for that behavior. Parallel batching of tests and impl in one step is a policy violation; if it happened, **Delivery Self-Check** for that row is **Fail**. Rust `tests/**/*.rs` counts as a test path. A failing test run must exist before product impl is TDD-complete; if the first test command was already green and no earlier failing run was recorded, the TDD write order row is **Fail**. Mode Lite is not blocked.
+3. **Progress vs final report.** Progress may be one short sentence (or none). Any user-visible assistant text that is the **final report of the turn**, OR **length >= 500**, must use Main Full section order with **Follow-Up Queue** last. Do not rename required headings.
+4. **Delivery Tier line.** The Delivery Tier line must include `Confidence: NN% | Evidence:` (same Confidence keyword).
+5. **Honor-system guards.** Dash ban, Confidence|Evidence format, no AskQuestion in mutating modes, and File Deletion Protocol still apply when hooks are absent.
+6. **Git.** IDE hooks still block mutating git. Cloud/SDK platform may commit to ship (`git branch` / `add` / `commit` / `push` and `gh pr create`; no force/reset/config). Use this exception only when the runtime is a cloud agent or SDK runner, not in Cursor IDE.
+
+Hook files: `delivery-structure-guard.mjs` (stop or length >= 500), `tdd-order-guard.mjs` (Main red phase), `scope-creep-guard.mjs` (emit Plan first on cloud/headless).
 
 This section does not relax Hard Boundaries in the IDE. It fills the gap when hooks cannot load.
 
@@ -98,12 +101,13 @@ User phrases such as **stop kodaelus**, **disable kodaelus**, **normal mode**, o
 | This policy + global `kodaelus-session` rule | Keeps Kodaelus behavior and mode across follow-up messages |
 | User hooks (`beforeSubmitPrompt`, `subagentStart`, `sessionEnd`) | Track active conversation IDs, mode, scope metadata via `detectKodaelusMode`; **`prepare continue`** / **`allow more fix cycles`** unlocks Prepare product edits after fix-cycle cap |
 | User hook (`beforeShellExecution`) | **Hard-blocks** mutating git/gh; **hard-blocks** shell deletes of entry points; **`block-readonly-shell`** / `extractPreferenceIntent`-adjacent `isReadOnlyMode` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file `>`/`>>` redirects, etc.); Suggest allows **`mkdir`** under `.kodaelus/suggestions/**` only; **requires** trash backup + manifest for shell rm in Main/Lite/Prepare |
-| User hook (`afterShellExecution`) (`shell-evidence-recorder.mjs`) | Records test-like command outcomes into session metadata; increments Prepare full-suite / fix-cycle counters |
+| User hook (`afterShellExecution`) (`shell-evidence-recorder.mjs`) | Records test-like command outcomes into session metadata; persists first-failing cargo/npm stdout; increments Prepare full-suite / fix-cycle counters |
 | User hook (`preToolUse` Delete) | **Hard-blocks** entry-point deletes; denies whole-file deletes outside `.kodaelus/` when `isBugInvestigationMode`; **requires** trash backup + manifest before Delete tool in Main/Lite/Prepare (`guard-delete.mjs`, `failClosed`) |
-| User hook (`preToolUse` Write/StrReplace/Delete/ApplyPatch) | **`isReadOnlyMode`** denies mutating tools in Prompt/Suggest/Question except Suggest **Write/StrReplace** under `.kodaelus/suggestions/**`; Bug Investigation allows Write/StrReplace/ApplyPatch only on diagnostic allowlist (`.kodaelus/**`, `*.test.*`/`*.spec.*`, instrumentation paths); Prepare denies product edits after **3** fix-rerun cycles until **`prepare continue`**; **hard-blocks** edits past scope limit until user replies **`scope approved`** |
+| User hook (`preToolUse` Write/StrReplace/Delete/ApplyPatch) | **`isReadOnlyMode`** denies mutating tools in Prompt/Suggest/Question except Suggest **Write/StrReplace** under `.kodaelus/suggestions/**`; Bug Investigation allows Write/StrReplace/ApplyPatch only on diagnostic allowlist (`.kodaelus/**`, `*.test.*`/`*.spec.*`/`tests/**/*.rs`, instrumentation paths); Prepare denies product edits after **3** fix-rerun cycles until **`prepare continue`**; **hard-blocks** edits past scope limit until user replies **`scope approved`**; headless/cloud Main with no Plan estimate denies with **emit Plan first** |
 | User hook (`preToolUse` Write/StrReplace/ApplyPatch) (`secrets-guard.mjs`) | Denies obvious secrets (API keys, private key blocks, `.env` secret bodies) outside fixtures / test / `.kodaelus/**` |
 | User hooks (`afterAgentResponse`, `stop`) | Parse Plan file estimates; flag bare `Confidence: NN%` without adjacent `Evidence:` |
-| User hooks (`afterAgentResponse`, `stop`) (`delivery-structure-guard.mjs`) | Main/Bug/Prepare: require mode sections (Delivery Self-Check, Follow-Up Queue, Prepare Ready vs Not ready) before clean stop |
+| User hooks (`afterAgentResponse`, `stop`) (`delivery-structure-guard.mjs`) | Main/Bug/Prepare: require mode sections (Delivery Self-Check, Follow-Up Queue, Prepare Ready vs Not ready) before clean stop. Progress may be one short sentence (or none); **stop** (final report of the turn) OR **length >= 500** must use Main Full section order with Follow-Up Queue last. Delivery Tier line must include `Confidence: NN% \| Evidence:` |
+| User hook (`preToolUse` Write/StrReplace/ApplyPatch + `stop`) (`tdd-order-guard.mjs`) | Main only (not Mode Lite): treat Rust `tests/**/*.rs` as test paths; deny product impl until a failing test run is recorded; stop follow-up if the first test command was already green |
 | User hooks (`afterAgentResponse`, `stop`) (`prompt-fence-guard.mjs`) | Prompt mode: require fenced Recommended block with fence preamble; flag Prompt activation phrases inside the fence |
 | User hooks (`afterAgentResponse`, `stop`) (`test-evidence-guard.mjs`) | Main/Prepare soft-gate: when Implementation occurred, require recorded test outcomes in delivery or session shell log |
 | User hook (`preToolUse` Write/StrReplace/ApplyPatch) + `stop` (`dash-guard.mjs`) | **Block-and-correct** unicode dashes (U+2013/U+2014): deny edits containing dashes; `stop` follow-up when chat output contains dashes (instruction-only, optional sanitized artifact under `.kodaelus/dash-guard/`) |
@@ -884,7 +888,7 @@ Before **Outcome Validation** (Full and Standard tiers), emit a mandatory **Deli
 
 **Do not claim complete if any applicable row is Fail.** A row is **Fail** when its supporting claims are below **70%** confidence or lack valid inline **Evidence:**. Rework, escalate, or obtain user acceptance before Outcome Validation.
 
-**TDD write order:** If new behavior was implemented by batching tests and product impl in the same write step, that row is **Fail**. Parallel batching is a policy violation even when tests later pass.
+**TDD write order:** If new behavior was implemented by batching tests and product impl in the same write step, that row is **Fail**. Parallel batching is a policy violation even when tests later pass. If the first test command was already green and no earlier failing run was recorded, that row is **Fail**.
 
 ## Response Structure
 

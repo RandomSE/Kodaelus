@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findConfidenceViolations } from "./confidence-format.mjs";
+import { findConfidenceViolations, isSubstantiveResponse } from "./confidence-format.mjs";
 
 test("findConfidenceViolations passes valid inline evidence", () => {
   const text = "Confidence: 90% | Evidence: `src/a.ts:1`";
@@ -15,4 +15,16 @@ test("findConfidenceViolations flags bare confidence", () => {
 test("findConfidenceViolations counts multiple violations", () => {
   const text = "Confidence: 70% then Confidence: 60% both lack evidence.";
   assert.equal(findConfidenceViolations(text).length, 2);
+});
+
+test("isSubstantiveResponse: progress under 500 chars is not substantive", () => {
+  assert.equal(isSubstantiveResponse("Wrote tests."), false);
+  assert.equal(isSubstantiveResponse(""), false);
+  assert.equal(isSubstantiveResponse("x".repeat(500)), true);
+});
+
+test("isSubstantiveResponse: stop/final report is substantive even when short", () => {
+  assert.equal(isSubstantiveResponse("Wrote tests.", 500, { event: "stop" }), true);
+  assert.equal(isSubstantiveResponse("Done.", 500, { finalReport: true }), true);
+  assert.equal(isSubstantiveResponse("   ", 500, { event: "stop" }), false);
 });

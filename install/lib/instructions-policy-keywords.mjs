@@ -34,6 +34,8 @@ export const HARDENED_POLICY_KEYWORDS = [
   "Hook-absent contract",
   "project-guidelines.md",
   "TDD write order",
+  "emit Plan first",
+  "tdd-order-guard.mjs",
   "## Delivery Tiers",
   "**Full**",
   "**Standard**",

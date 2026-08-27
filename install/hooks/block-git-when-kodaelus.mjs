@@ -4,6 +4,7 @@
  * Event: beforeShellExecution
  */
 import { isBlockedGitShellCommand } from "./lib/git-guard.mjs";
+import { isCloudDeliveryRuntime } from "./lib/cloud-runtime.mjs";
 import { isSessionActive } from "./lib/session-store.mjs";
 
 async function readInput() {
@@ -42,7 +43,11 @@ const input = await readInput();
 const command = `${input.command ?? ""}`;
 
 try {
-  if (isSessionActive(input.conversation_id ?? "") && isBlockedGitShellCommand(command)) {
+  const cloudDelivery = isCloudDeliveryRuntime();
+  if (
+    isSessionActive(input.conversation_id ?? "") &&
+    isBlockedGitShellCommand(command, { cloudDelivery })
+  ) {
     deny();
   }
 } catch {

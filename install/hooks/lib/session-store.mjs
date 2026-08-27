@@ -40,6 +40,7 @@ import { dirname, join } from "node:path";
  * @property {number} prepareFixCycleCount
  * @property {boolean} prepareContinueApproved
  * @property {ShellEvidenceEntry[]} shellEvidence
+ * @property {{ command: string, outcome: string, stdout: string, at: string } | null} firstFailingTest
  */
 
 import {
@@ -82,6 +83,7 @@ function emptyMetadata() {
     prepareFixCycleCount: 0,
     prepareContinueApproved: false,
     shellEvidence: [],
+    firstFailingTest: null,
   };
 }
 
@@ -208,6 +210,18 @@ function normalizeMetadata(raw) {
       })
       .filter((row) => row.command)
       .slice(-50);
+  }
+  if (record.firstFailingTest && typeof record.firstFailingTest === "object") {
+    const fail = /** @type {Record<string, unknown>} */ (record.firstFailingTest);
+    const command = `${fail.command ?? ""}`;
+    if (command) {
+      base.firstFailingTest = {
+        command,
+        outcome: `${fail.outcome ?? ""}`,
+        stdout: `${fail.stdout ?? ""}`.slice(0, 8000),
+        at: `${fail.at ?? ""}`,
+      };
+    }
   }
   return base;
 }
@@ -646,3 +660,29 @@ export function recordShellEvidence(conversationId, command, outcome = "") {
     return true;
   });
 }
+
+/**
+ * Persist the first failing cargo/npm test stdout for TDD red-phase evidence.
+ *
+ * @param {string} conversationId
+ * @param {{ command: string, outcome?: string, stdout?: string }} entry
+ */
+export function recordFirstFailingTest(conversationId, entry) {
+  if (!conversationId || !entry?.command) return false;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    if (meta.firstFailingTest) return true;
+    meta.firstFailingTest = {
+      command: `${entry.command}`.slice(0, 500),
+      outcome: `${entry.outcome ?? ""}`.slice(0, 200),
+      stdout: `${entry.stdout ?? ""}`.slice(0, 8000),
+      at: new Date().toISOString(),
+    };
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
+}
+

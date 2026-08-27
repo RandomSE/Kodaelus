@@ -21,10 +21,12 @@ test.beforeEach(() => {
   tempHome = mkdtempSync(join(tmpdir(), "kodaelus-readonly-home-"));
   tempProject = mkdtempSync(join(tmpdir(), "kodaelus-readonly-project-"));
   process.env.CURSOR_HOME = tempHome;
+  process.env.KODAELUS_CLOUD_DELIVERY = "0";
 });
 
 test.afterEach(() => {
   delete process.env.CURSOR_HOME;
+  delete process.env.KODAELUS_CLOUD_DELIVERY;
   rmSync(tempHome, { recursive: true, force: true });
   rmSync(tempProject, { recursive: true, force: true });
 });

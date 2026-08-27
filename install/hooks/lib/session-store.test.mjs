@@ -234,3 +234,17 @@ test("prepare fix-cycle metadata and shell evidence", async () => {
   assert.equal(meta?.shellEvidence.at(-1)?.command, "npm test");
   deactivateSession("conv-prep-meta");
 });
+
+test("recordFirstFailingTest persists cargo/npm stdout", async () => {
+  const { recordFirstFailingTest, getSessionMetadata } = await import("./session-store.mjs");
+  activateSession("conv-fail-stdout", "main");
+  recordFirstFailingTest("conv-fail-stdout", {
+    command: "cargo test",
+    outcome: "exit=101",
+    stdout: "test matching::it_works ... FAILED",
+  });
+  const meta = getSessionMetadata("conv-fail-stdout");
+  assert.equal(meta?.firstFailingTest?.command, "cargo test");
+  assert.match(meta?.firstFailingTest?.stdout ?? "", /FAILED/);
+  deactivateSession("conv-fail-stdout");
+});

@@ -7,6 +7,8 @@ import { SUGGESTIONS_DIR_REL } from "./suggestions-diff.mjs";
 import { isKodaelusArtifactPath } from "./deletion-guard.mjs";
 
 const TEST_FILE_RE = /\.(?:test|spec)\.[^/]+$/i;
+const UNDERSCORE_TEST_RE = /_test\.[^/]+$/i;
+const RUST_TESTS_DIR_RE = /(?:^|\/)tests\/.+\.rs$/i;
 const DIAGNOSTIC_DIR_RE =
   /(?:^|\/)(?:debug|diag|diagnostic|instrument|instrumentation|repro)(?:\/|$)/i;
 const DIAGNOSTIC_FILE_RE =
@@ -26,8 +28,14 @@ export function normalizeRelPath(relativePath) {
  */
 export function isTestOrSpecPath(relativePath) {
   const normalized = normalizeRelPath(relativePath);
+  if (!normalized) return false;
   const base = normalized.split("/").pop() ?? normalized;
-  return TEST_FILE_RE.test(base) || TEST_FILE_RE.test(normalized);
+  return (
+    TEST_FILE_RE.test(base) ||
+    TEST_FILE_RE.test(normalized) ||
+    UNDERSCORE_TEST_RE.test(base) ||
+    RUST_TESTS_DIR_RE.test(normalized)
+  );
 }
 
 /**

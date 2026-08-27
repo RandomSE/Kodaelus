@@ -2,6 +2,9 @@
 /**
  * User-level Cursor hook: require mode delivery sections on stop (Main/Bug/Prepare).
  * Events: afterAgentResponse (log), stop (follow-up)
+ *
+ * Progress may be one short sentence (or none). Final report of the turn (stop)
+ * OR length >= 500 must include required headings with Follow-Up Queue last.
  */
 import {
   buildDeliveryStructureFollowup,
@@ -51,7 +54,7 @@ try {
     allowEmpty();
   }
 
-  if (!isSubstantiveResponse(text)) {
+  if (!isSubstantiveResponse(text, 500, { event })) {
     allowEmpty();
   }
 
