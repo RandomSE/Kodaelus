@@ -46,17 +46,35 @@ const conversationId = `${input.conversation_id ?? input.conversationId ?? ""}`;
 const text = `${input.response ?? input.text ?? input.agent_response ?? ""}`;
 const loopCount = Number(input.loop_count ?? input.loopCount ?? 0) || 0;
 
+/**
+ * The guard's own follow-up is a natural-language prompt. Following up again
+ * resubmits that sentence forever when Cursor auto-sends it.
+ * @param {string | undefined} prompt
+ */
+function isOwnFollowupPrompt(prompt) {
+  return typeof prompt === "string" && /Kodaelus recommendation-insights guard:/i.test(prompt);
+}
+
 try {
   if (!isSessionActive(conversationId)) {
     allow();
   }
 
+  // An empty stop payload cannot show the lines are missing. Fail open.
+  if (!text.trim()) {
+    allow();
+  }
+
   const mode = getSessionMode(conversationId) ?? "";
+  const meta = getSessionMetadata(conversationId);
+  if (isOwnFollowupPrompt(meta?.lastUserPrompt)) {
+    allow();
+  }
+
   /** @type {string[]} */
   const notes = [];
 
   if (RECOMMEND_MODES.has(mode)) {
-    const meta = getSessionMetadata(conversationId);
     if (meta?.lastPromptHadExplicitMode === false && responseMissingRecommendation(text)) {
       notes.push(
         "Add Active mode: and a recommendKodaelusIntent or recommendCeremony line that includes Does not switch mode. The recommendation does not change mode.",

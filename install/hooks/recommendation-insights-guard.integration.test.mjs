@@ -102,6 +102,32 @@ describe("recommendation insights stop", { concurrency: 1 }, () => {
     deactivateSession("conv-rec-loop");
   });
 
+  test("empty stop text and an already-sent guard prompt do not follow up again", async () => {
+    activateSession("conv-rec-empty", "main");
+    recordPromptContext("conv-rec-empty", "what is going on with this loop");
+
+    const empty = await runHook({
+      hook_event_name: "stop",
+      conversation_id: "conv-rec-empty",
+      response: "",
+      workspace_roots: [tempProject],
+    });
+    assert.equal(empty.code, 0);
+
+    recordPromptContext(
+      "conv-rec-empty",
+      "Kodaelus recommendation-insights guard: Add Active mode: and a recommendKodaelusIntent or recommendCeremony line that includes Does not switch mode. The recommendation does not change mode.",
+    );
+    const resent = await runHook({
+      hook_event_name: "stop",
+      conversation_id: "conv-rec-empty",
+      response: "short reply with no required lines",
+      workspace_roots: [tempProject],
+    });
+    assert.equal(resent.code, 0);
+    deactivateSession("conv-rec-empty");
+  });
+
   test("insights nudge is skipped when the file is absent", async () => {
     const bare = mkdtempSync(join(tmpdir(), "kodaelus-rec-bare-"));
     activateSession("conv-rec-bare", "prepare");
