@@ -79,6 +79,43 @@ export function isSuggestArtifactPath(relativePath) {
 }
 
 /**
+ * Suggestions suffix from a raw edit path, including Windows extended paths.
+ * @param {string} editPath
+ * @returns {string | null}
+ */
+export function suggestionsPathTail(editPath) {
+  const normalized = `${editPath ?? ""}`.replace(/\\/g, "/");
+  const marker = SUGGESTIONS_DIR_REL;
+  const idx = normalized.toLowerCase().indexOf(marker);
+  if (idx < 0) return null;
+  const before = idx === 0 ? "" : normalized[idx - 1];
+  if (before && before !== "/" && before !== ":") return null;
+  const tail = normalized.slice(idx).replace(/["'\\].*$/, "");
+  if (!tail || tail.includes("..")) return null;
+  return tail;
+}
+
+/**
+ * Posix path.resolve keeps `C:\...` as a relative segment, so the resolved
+ * string can contain `.kodaelus/suggestions` without being rooted there.
+ * Salvage that Windows absolute form. A real relative path such as
+ * `evil/.kodaelus/suggestions` stays unchanged.
+ * @param {string} rel
+ * @param {string} raw
+ * @returns {string}
+ */
+export function resolveSuggestWritePath(rel, raw) {
+  const tail = suggestionsPathTail(raw);
+  if (!tail || !isSuggestArtifactPath(tail)) return rel;
+  const normalizedRel = `${rel ?? ""}`.replace(/\\/g, "/");
+  if (isSuggestArtifactPath(normalizedRel)) return rel;
+  if (/^[A-Za-z]:\//.test(normalizedRel)) return tail;
+  if (normalizedRel.includes(".kodaelus/suggestions")) return rel;
+  if (tail === normalizedRel || tail.endsWith(`/${normalizedRel}`)) return tail;
+  return rel;
+}
+
+/**
  * Paths where intentional fake secrets are allowed.
  * @param {string} relativePath
  * @returns {boolean}

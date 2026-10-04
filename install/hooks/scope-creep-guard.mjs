@@ -15,6 +15,8 @@ import {
   isSuggestArtifactPath,
   isWriteOrStrReplaceTool,
   isWriteStrReplaceOrPatchTool,
+  resolveSuggestWritePath,
+  suggestionsPathTail,
 } from "./lib/path-allowlist.mjs";
 import {
   approveScope,
@@ -144,15 +146,7 @@ function pushEditPathFields(paths, source) {
  * @returns {string | null}
  */
 function suggestionsTail(editPath) {
-  const normalized = `${editPath}`.replace(/\\/g, "/");
-  const marker = ".kodaelus/suggestions";
-  const idx = normalized.toLowerCase().indexOf(marker);
-  if (idx < 0) return null;
-  const before = idx === 0 ? "" : normalized[idx - 1];
-  if (before && before !== "/" && before !== ":") return null;
-  const tail = normalized.slice(idx).replace(/["'\\].*$/, "");
-  if (!tail || tail.includes("..")) return null;
-  return tail;
+  return suggestionsPathTail(editPath);
 }
 
 /**

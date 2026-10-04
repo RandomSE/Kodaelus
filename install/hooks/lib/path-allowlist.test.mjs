@@ -10,6 +10,7 @@ import {
   isTestOrSpecPath,
   isWriteOrStrReplaceTool,
   isWriteStrReplaceOrPatchTool,
+  resolveSuggestWritePath,
 } from "./path-allowlist.mjs";
 
 test("isBugDiagnosticWritePath allows .kodaelus, tests, diagnostic heuristics", () => {
@@ -22,6 +23,32 @@ test("isBugDiagnosticWritePath allows .kodaelus, tests, diagnostic heuristics", 
   assert.equal(isBugDiagnosticWritePath("repro_login.js"), true);
   assert.equal(isBugDiagnosticWritePath("src/app.ts"), false);
   assert.equal(isBugDiagnosticWritePath("install/hooks/scope-creep-guard.mjs"), false);
+});
+
+test("resolveSuggestWritePath salvages Windows absolute suggestions paths", () => {
+  const stripped =
+    "C:\\Users\\someone\\OneDrive\\Desktop\\Repo\\.kodaelus\\suggestions\\2026-10-02-issues.md";
+  const posixRel =
+    "C:/Users/someone/OneDrive/Desktop/Repo/.kodaelus/suggestions/2026-10-02-issues.md";
+  assert.equal(
+    resolveSuggestWritePath(posixRel, stripped),
+    ".kodaelus/suggestions/2026-10-02-issues.md",
+  );
+  assert.equal(
+    resolveSuggestWritePath("2026-10-02-issues.md", stripped),
+    ".kodaelus/suggestions/2026-10-02-issues.md",
+  );
+  assert.equal(
+    resolveSuggestWritePath(
+      "evil/.kodaelus/suggestions/x.md",
+      "evil/.kodaelus/suggestions/x.md",
+    ),
+    "evil/.kodaelus/suggestions/x.md",
+  );
+  assert.equal(
+    resolveSuggestWritePath(".kodaelus/suggestions/x.md", ".kodaelus/suggestions/x.md"),
+    ".kodaelus/suggestions/x.md",
+  );
 });
 
 test("isSuggestArtifactPath only under .kodaelus/suggestions", () => {
