@@ -191,12 +191,7 @@ function collectEditPaths(input) {
  * @returns {string}
  */
 function preferSuggestionsTail(rel, raw) {
-  const tail = suggestionsTail(raw);
-  if (!tail || !isSuggestArtifactPath(tail)) return rel;
-  const normalizedRel = `${rel ?? ""}`.replace(/\\/g, "/");
-  if (normalizedRel.includes(".kodaelus/suggestions")) return rel;
-  if (tail === normalizedRel || tail.endsWith(`/${normalizedRel}`)) return tail;
-  return rel;
+  return resolveSuggestWritePath(rel, raw);
 }
 
 function toRelativePaths(input, editPaths) {
