@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
  * User-level Cursor hook: require mode delivery sections on stop (Main/Bug/Prepare).
+ * Mode Lite is an abbreviated soft check (Tests + Delivery Self-Check, no Follow-Up Queue)
+ * and shares this stop hook's loop_limit.
  * Events: afterAgentResponse (log), stop (follow-up)
  *
  * Progress may be one short sentence (or none). Plan-first messages are
@@ -16,9 +18,10 @@ import {
   getSessionMode,
   isPrepareFixCycleCapped,
   isSessionActive,
+  isShipCiRepairCapped,
 } from "./lib/session-store.mjs";
 
-const CHECKED_MODES = new Set(["main", "bug", "prepare"]);
+const CHECKED_MODES = new Set(["main", "bug", "prepare", "lite", "ship"]);
 
 async function readInput() {
   const chunks = [];
@@ -59,8 +62,10 @@ try {
     allowEmpty();
   }
 
-  const prepareCapped = mode === "prepare" && isPrepareFixCycleCapped(conversationId);
-  const missing = findMissingDeliverySections(mode, text, { prepareCapped });
+  const prepareCapped =
+    (mode === "prepare" || mode === "ship") && isPrepareFixCycleCapped(conversationId);
+  const shipCiCapped = mode === "ship" && isShipCiRepairCapped(conversationId);
+  const missing = findMissingDeliverySections(mode, text, { prepareCapped, shipCiCapped });
   if (missing.length === 0) {
     allowEmpty();
   }

@@ -5,7 +5,7 @@ function usage(): never {
 
 Environment:
   CURSOR_API_KEY          Required. User or service-account API key.
-  KODAELUS_INSTRUCTIONS   Optional. Path to instructions.md (default: global install)
+  KODAELUS_INSTRUCTIONS   Optional. Policy directory, or a file inside it (same as resolvePolicyDir). Not a path to a full instructions.md. Default: ~/.cursor/kodaelus
 
 Project guidelines:
   Bootstraps .kodaelus/instructions.md in KODAELUS_CWD when missing and appends it to the policy prompt.
@@ -13,7 +13,7 @@ Project guidelines:
 SDK vs IDE:
   The SDK preloads policy text and detects mode from the task string.
   Cursor IDE hooks enforce git read-only, delete backup/manifest, scope creep, and confidence format.
-  Full safety guards require Kodaelus active in Cursor — not in programmatic SDK runs.
+  Full safety guards require Kodaelus active in Cursor, not in programmatic SDK runs.
 
 Options (env):
   KODAELUS_MODEL   Model id (default: composer-2.5)

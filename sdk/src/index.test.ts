@@ -36,6 +36,9 @@ describe("public SDK exports", () => {
     );
     expect(DELETION_MANIFEST_REL).toBe(".kodaelus/deletion-manifest.json");
     expect(buildModeHeader("prompt")).toContain("read-only");
+    const suggestHeader = buildModeHeader("suggest");
+    expect(suggestHeader).toMatch(/\.kodaelus\/suggestions/);
+    expect(suggestHeader.toLowerCase()).not.toContain("do not mutate project files");
     const preflight = runSdkPreflight({
       mode: "prompt",
       task: "use kodaelus 1",

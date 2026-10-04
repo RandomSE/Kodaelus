@@ -3,7 +3,17 @@ export type { KodaelusRunOptions, KodaelusRunOutcome } from "./agent.js";
 
 export {
   loadInstructions,
+  loadPolicyForMode,
   resolveInstructionsPath,
+  resolvePolicyDir,
+  selectTaskModules,
+  formatTaskModuleLog,
+  inferDeliveryTier,
+  alwaysTasksForMode,
+  extractSelfCheckSection,
+  readPolicyManifestSync,
+  checkSdkDelivery,
+  corePolicyPath,
   wrapTaskWithInstructions,
   globalInstructionsPath,
   projectInstructionsPath,
@@ -11,6 +21,8 @@ export {
   loadProjectGuidelines,
   loadInstructionsWithProjectGuidelines,
   ensureProjectGuidelines,
+  appendProjectInsight,
+  loadProjectInsights,
   recordPreferenceCandidate,
   normalizePreferenceKey,
   extractPreferenceIntent,
@@ -22,6 +34,12 @@ export {
 } from "./instructions.js";
 export type {
   ResolveInstructionsOptions,
+  LoadPolicyOptions,
+  PolicyTaskMatch,
+  PolicyManifest,
+  PolicyFragmentRef,
+  DeliveryTierName,
+  SdkDeliveryCheck,
   ProjectGuidelinesOptions,
   EnsureProjectGuidelinesResult,
   PreferenceLog,
@@ -65,3 +83,6 @@ export {
   isMutatingMode,
   isReadOnlyMode,
 } from "./mode-detect.js";
+
+export { recommendCeremony, recommendKodaelusIntent } from "./intent-router.js";
+export type { CeremonyRecommendation, IntentRecommendation } from "./intent-router.js";

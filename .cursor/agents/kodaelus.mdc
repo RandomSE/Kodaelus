@@ -1,17 +1,26 @@
 ---
 name: Kodaelus
-description: Project-local alias — prefer the global Kodaelus subagent after running npm run install:global
+description: Project-local alias. Prefer the global Kodaelus subagent after running npm run install:global
 model: composer-2.5
 ---
 
 # Kodaelus (project stub)
 
-For use in **any** project without copying this repo, run once from the Kodaelus distribution folder:
+For use in any project without copying this repo, run once from the Kodaelus distribution folder:
 
 ```bash
 npm run install:global
 ```
 
-That installs `~/.cursor/agents/kodaelus.md` and `~/.cursor/kodaelus/instructions.md`. Select **kodaelus** from the agent menu in any workspace.
+That installs:
 
-When developing this repo only, you may also read `kodaelus/instructions.md` here.
+- `~/.cursor/kodaelus/core.md` (always-on policy)
+- `~/.cursor/kodaelus/modes/` (one file per mode)
+- `~/.cursor/kodaelus/tasks/` (task modules)
+- `~/.cursor/kodaelus/policy-manifest.json` (task packs and self-check fragments)
+- `~/.cursor/kodaelus/instructions.md` (redirect stub only, not the full policy)
+- `~/.cursor/agents/kodaelus.md`, `kodaelus-bug.md`, and `kodaelus-prompt.md`
+
+Select **kodaelus** (Main), **kodaelus-bug** (Bug Investigation), or **kodaelus-prompt** (Planner / Prompt) from the agent menu.
+
+Read `core.md`, then one mode file, then the files `policy-manifest.json` lists. Do not treat `instructions.md` as the policy.

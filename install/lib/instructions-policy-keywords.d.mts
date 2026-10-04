@@ -3,6 +3,9 @@ export function validateInstructionsPolicy(
   minLength?: number,
 ): string[];
 
+export function validatePolicyTree(policyRoot: string): string[];
+export function policyLineCount(text: string): number;
+
 export function findMissingPolicyKeywords(content: string): string[];
 
 export function checkHookAbsentContract(content: string): string[];

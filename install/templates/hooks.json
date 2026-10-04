@@ -123,12 +123,17 @@
       {
         "command": "node ./hooks/tdd-order-guard.mjs",
         "loop_limit": 2
+      },
+      {
+        "command": "node ./hooks/recommendation-insights-guard.mjs",
+        "failClosed": true,
+        "loop_limit": 2
       }
     ],
     "beforeShellExecution": [
       {
         "command": "node ./hooks/block-git-when-kodaelus.mjs",
-        "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow)\\b"
+        "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow|run)\\b"
       },
       {
         "command": "node ./hooks/block-readonly-shell.mjs"

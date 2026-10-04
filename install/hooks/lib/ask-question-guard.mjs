@@ -6,7 +6,7 @@
 export const MAX_FOLLOWUP_CHARS = 800;
 
 /** Modes where AskQuestion should be denied when hooks fire. */
-export const DENY_ASK_QUESTION_MODES = new Set(["main", "lite", "bug", "prepare"]);
+export const DENY_ASK_QUESTION_MODES = new Set(["main", "lite", "bug", "prepare", "ship"]);
 
 /**
  * Keep false until Cursor confirms AskQuestion/AskUserQuestion fire preToolUse.
@@ -84,6 +84,8 @@ export function detectOpenClarification(text) {
 
   // Strong direct asks (no question-mark gate)
   if (/\bplease choose\b/i.test(t)) return true;
+  if (/\bneed you to (choose|pick)\b/i.test(t)) return true;
+  if (/\bawaiting your (choice|decision)\b/i.test(t)) return true;
   if (/\bpick one\b[:.]?/i.test(t)) return true;
   if (/\bselect (one|an option)\b/i.test(t)) return true;
   if (/\bwhich (would you|do you) (prefer|want|choose)\b/i.test(t)) return true;
@@ -91,6 +93,7 @@ export function detectOpenClarification(text) {
   // Medium: require a nearby question mark (same ~window) to avoid docs like
   // "user may reply with scope approved" or narrative "which option was chosen".
   if (/\bwhich option\b[^?\n]{0,100}\?/i.test(t)) return true;
+  if (/\bwhich of these\b[^?\n]{0,80}\?/i.test(t)) return true;
   if (/\breply with\b[^?\n]{0,80}\?/i.test(t)) return true;
   if (/\bshould I\b[^?\n]{0,120}\?/i.test(t)) return true;
 

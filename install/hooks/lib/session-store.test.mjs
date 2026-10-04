@@ -87,6 +87,9 @@ test("detectKodaelusMode: suggest, lite, question, and prepare modes", () => {
   assert.equal(detectKodaelusMode("use kodaelus 6"), "prepare");
   assert.equal(detectKodaelusMode("use kodaelus prep"), "prepare");
   assert.equal(detectKodaelusMode("kodaelus prepare mode"), "prepare");
+  assert.equal(detectKodaelusMode("use kodaelus ship"), "ship");
+  assert.equal(detectKodaelusMode("use kodaelus 7"), "ship");
+  assert.equal(detectKodaelusMode("kodaelus ship mode"), "ship");
 });
 
 test("detectKodaelusMode: leading prepare beats body prompt mentions", () => {
@@ -99,9 +102,11 @@ test("detectKodaelusMode: leading prepare beats body prompt mentions", () => {
   assert.equal(detectKodaelusMode(paste), "prepare");
 });
 
-test("isMutatingMode includes prepare; isReadOnlyMode excludes it", () => {
+test("isMutatingMode includes prepare and ship; isReadOnlyMode excludes them", () => {
   assert.equal(isMutatingMode("prepare"), true);
   assert.equal(isReadOnlyMode("prepare"), false);
+  assert.equal(isMutatingMode("ship"), true);
+  assert.equal(isReadOnlyMode("ship"), false);
 });
 
 test("detectKodaelusMode: leading activation beats body prompt mentions", () => {
@@ -233,6 +238,32 @@ test("prepare fix-cycle metadata and shell evidence", async () => {
   const meta = getSessionMetadata("conv-prep-meta");
   assert.equal(meta?.shellEvidence.at(-1)?.command, "npm test");
   deactivateSession("conv-prep-meta");
+});
+
+test("ship CI repair allows 3 product fixes then caps until ship ci continue", async () => {
+  const store = await import("./session-store.mjs");
+  assert.equal(store.isShipCiContinuePrompt("ship ci continue"), true);
+  assert.equal(store.isShipCiContinuePrompt("ship continue"), false);
+  assert.equal(store.classifyShipCiPoll("gh pr checks", "fail"), "fail");
+  assert.equal(store.classifyShipCiPoll("gh run view 9", "pending"), "pending");
+  assert.equal(store.classifyShipCiPoll("gh pr merge", "fail"), null);
+
+  activateSession("conv-ship-ci", "ship");
+  store.recordShipCiPoll("conv-ship-ci", "fail");
+  assert.equal(store.isShipCiRepairCapped("conv-ship-ci"), false);
+  store.recordShipCiRepairEdit("conv-ship-ci");
+  store.recordShipCiRepairEdit("conv-ship-ci");
+  store.recordShipCiRepairEdit("conv-ship-ci");
+  assert.equal(store.isShipCiRepairCapped("conv-ship-ci"), true);
+  store.approveShipCiContinue("conv-ship-ci");
+  assert.equal(store.isShipCiRepairCapped("conv-ship-ci"), false);
+
+  store.recordShipCiPoll("conv-ship-ci", "pending");
+  store.recordShipCiPoll("conv-ship-ci", "pending");
+  store.recordShipCiPoll("conv-ship-ci", "pending");
+  store.recordShipCiPoll("conv-ship-ci", "pending");
+  assert.equal(store.isShipCiPollLimited("conv-ship-ci"), true);
+  deactivateSession("conv-ship-ci");
 });
 
 test("recordFirstFailingTest persists cargo/npm stdout", async () => {

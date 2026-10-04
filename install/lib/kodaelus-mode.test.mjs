@@ -38,10 +38,11 @@ test("isBugInvestigationMode is true only for bug mode", () => {
   assert.equal(isBugInvestigationMode("main"), false);
 });
 
-test("isMutatingMode is true for main, lite, and prepare", () => {
+test("isMutatingMode is true for main, lite, prepare, and ship", () => {
   assert.equal(isMutatingMode("main"), true);
   assert.equal(isMutatingMode("lite"), true);
   assert.equal(isMutatingMode("prepare"), true);
+  assert.equal(isMutatingMode("ship"), true);
   assert.equal(isMutatingMode("prompt"), false);
 });
 

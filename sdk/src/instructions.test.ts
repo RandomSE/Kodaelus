@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { validateInstructionsPolicy } from "../../install/lib/instructions-policy-keywords.mjs";
+import { validatePolicyTree } from "../../install/lib/instructions-policy-keywords.mjs";
 import {
   ensureProjectGuidelines,
+  formatTaskModuleLog,
   globalInstructionsPath,
   loadInstructions,
   loadInstructionsWithProjectGuidelines,
+  checkSdkDelivery,
+  inferDeliveryTier,
+  loadPolicyForMode,
   loadProjectGuidelines,
   normalizePreferenceKey,
   PREFERENCE_LOG_REL,
@@ -16,6 +21,7 @@ import {
   recordPreferenceCandidate,
   resolveDistributionRepoRoot,
   resolveInstructionsPath,
+  selectTaskModules,
   wrapTaskWithInstructions,
 } from "./instructions.js";
 
@@ -95,6 +101,44 @@ describe("loadInstructions", () => {
     }
   });
 
+  it("serves core.md when the install layout is a redirect stub plus core", async () => {
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-load-"));
+    const cursorHome = path.join(loadTempDir, ".cursor");
+    const policyDir = path.join(cursorHome, "kodaelus");
+    await mkdir(policyDir, { recursive: true });
+    await writeFile(
+      path.join(policyDir, "instructions.md"),
+      "# Kodaelus policy redirect\n\nThis file is a redirect. Do not treat it as the full policy.\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(policyDir, "core.md"),
+      "# Kodaelus core policy\n\n## Confidence Scoring & Anti-Hallucination\n",
+      "utf8",
+    );
+    await mkdir(path.join(policyDir, "modes"), { recursive: true });
+    await writeFile(path.join(policyDir, "modes", "main.md"), "# Main mode\n", "utf8");
+    await writeFile(
+      path.join(policyDir, "policy-manifest.json"),
+      JSON.stringify({ version: 1, modes: { main: { always: [], fragments: [] } }, conditional: [] }),
+      "utf8",
+    );
+
+    const content = await loadInstructions({
+      cwd: loadTempDir,
+      cursorHome,
+    });
+    expect(content).toContain("# Kodaelus core policy");
+    expect(content).not.toMatch(/^# Kodaelus policy redirect/m);
+
+    const combined = await loadInstructionsWithProjectGuidelines({
+      cwd: loadTempDir,
+      cursorHome,
+    });
+    expect(combined).toContain("## Confidence Scoring & Anti-Hallucination");
+    expect(combined).not.toContain("This file is a redirect");
+  });
+
   it("reads from resolved path", async () => {
     loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-load-"));
     const localPath = projectInstructionsPath(loadTempDir);
@@ -108,59 +152,270 @@ describe("loadInstructions", () => {
     expect(content).toContain("Kodaelus");
   });
 
-  it("includes required policy sections in distribution instructions", async () => {
+  it("loads core plus one mode for a simple Main task", async () => {
     const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
-    const content = await loadInstructions({
-      cwd: repoRoot,
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const content = await loadPolicyForMode("main", {
+      cwd: loadTempDir,
       cursorHome: path.join(repoRoot, ".cursor-missing"),
+      task: "add a field to the struct",
+      logTaskMatch: false,
     });
-    expect(content).toContain("## Process Framework");
-    expect(content).toContain("## Session Lock");
+    if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+    else process.env.KODAELUS_INSTRUCTIONS = previous;
     expect(content).toContain("## Confidence Scoring & Anti-Hallucination");
+    expect(content).toContain("## Delivery Tiers");
+    expect(content).toContain("## Test Discovery & CI Parity");
+    expect(content).toContain("## Follow-Up Queue");
+    expect(content).not.toContain("## File Deletion Protocol");
+    expect(content).not.toContain("### Bug Investigation mode");
     expect(content).not.toContain("No super files");
   });
 
-  it("includes architecture review, follow-up queue, and kodaelus modes", async () => {
+  it("prompt mode does not load other modes or deletion protocol", async () => {
     const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
-    const content = await loadInstructions({
-      cwd: repoRoot,
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const content = await loadPolicyForMode("prompt", {
+      cwd: loadTempDir,
       cursorHome: path.join(repoRoot, ".cursor-missing"),
+      task: "write a paste-ready spec",
+      logTaskMatch: false,
     });
+    expect(content).toContain("## Planner / Prompt response structure");
+    expect(content).not.toContain("## File Deletion Protocol");
+    expect(content).not.toContain("## Bug Investigation mode");
+    expect(content).not.toContain("### Main mode response structure");
+    if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+    else process.env.KODAELUS_INSTRUCTIONS = previous;
+  });
+
+  it("includes project guidelines and logs skipped task modules", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const guidelinesPath = projectGuidelinesPath(loadTempDir);
+    await mkdir(path.dirname(guidelinesPath), { recursive: true });
+    await writeFile(guidelinesPath, "## Conventions\n\nUse vitest.\n", "utf8");
+
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    };
+    try {
+      const content = await loadPolicyForMode("main", {
+        cwd: loadTempDir,
+        cursorHome: path.join(repoRoot, ".cursor-missing"),
+        task: "clean up this module",
+      });
+      expect(content).toContain("Use vitest.");
+      expect(content).toContain("## Project-specific guidelines");
+      expect(content).not.toContain("## File Deletion Protocol");
+    } finally {
+      console.error = original;
+      if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+      else process.env.KODAELUS_INSTRUCTIONS = previous;
+    }
+    expect(errors.join("\n")).toMatch(/best-effort keyword match, not guaranteed/);
+    expect(errors.join("\n")).toMatch(/not loaded=.*engineering-bar/);
+  });
+
+  it("keyword match includes refactor and architecture review task files", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const content = await loadPolicyForMode("main", {
+      cwd: loadTempDir,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+      task: "refactor the parser and redesign the boundary",
+      logTaskMatch: false,
+    });
+    expect(content).toContain(".kodaelus/baselines/");
     expect(content).toContain("## Architecture Improvement Review");
+    expect(content).toContain("# Engineering bar");
+    if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+    else process.env.KODAELUS_INSTRUCTIONS = previous;
+  });
+
+  it("policy tree passes keyword ownership checks", () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    expect(validatePolicyTree(path.join(repoRoot, "kodaelus"))).toEqual([]);
+  });
+
+  it("bug pack always includes Follow-Up Queue and the bug self-check", async () => {
+    const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const content = await loadPolicyForMode("bug", {
+      cwd: loadTempDir,
+      cursorHome: path.join(repoRoot, ".cursor-missing"),
+      task: "investigate the flake",
+      logTaskMatch: false,
+    });
+    if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+    else process.env.KODAELUS_INSTRUCTIONS = previous;
     expect(content).toContain("## Follow-Up Queue");
-    expect(content).toContain("## Kodaelus Modes");
-    expect(content).toContain("use kodaelus 1");
-    expect(content).toContain("implement suggestions");
-    expect(content).toContain("FU-1");
     expect(content).toContain("Placement rule");
-    expect(content).toContain("Final section");
-    expect(content).toMatch(/Follow-Up Queue.*Final section.*use kodaelus bugfix/s);
-    expect(content).toContain("use kodaelus suggest issues");
-    expect(content).toContain("use kodaelus lite");
-    expect(content).toContain("use kodaelus question");
-    expect(content).toContain("guard-delete.mjs");
-    expect(content).toContain("scope approved");
+    expect(content).toContain("no Outcome Validation section");
+    expect(content).not.toContain("## File Deletion Protocol");
+    expect(content).not.toContain("Before **Outcome Validation**");
   });
 
-  it("includes project-specific guidelines policy", async () => {
+  it("Delivery Tier Lite Main pack omits TDD, test discovery, and follow-up tasks", async () => {
     const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
-    const content = await loadInstructions({
-      cwd: repoRoot,
+    loadTempDir = await mkdtemp(path.join(tmpdir(), "kodaelus-policy-"));
+    const previous = process.env.KODAELUS_INSTRUCTIONS;
+    process.env.KODAELUS_INSTRUCTIONS = path.join(repoRoot, "kodaelus");
+    const content = await loadPolicyForMode("main", {
+      cwd: loadTempDir,
       cursorHome: path.join(repoRoot, ".cursor-missing"),
+      task: "Delivery Tier: Lite wording tweak",
+      logTaskMatch: false,
     });
-    expect(content).toContain("## Project-Specific Guidelines");
-    expect(content).toContain(".kodaelus/instructions.md");
-    expect(content).toContain(".kodaelus/preference-log.json");
-    expect(content).toContain("ensureProjectGuidelines");
+    if (previous === undefined) delete process.env.KODAELUS_INSTRUCTIONS;
+    else process.env.KODAELUS_INSTRUCTIONS = previous;
+    expect(content).toContain("## Delivery Tiers");
+    expect(content).toContain("## Delivery Self-Check");
+    expect(content).not.toContain("# Test-Driven Development");
+    expect(content).not.toContain("## Test Discovery & CI Parity");
+    expect(content).not.toContain("## Follow-Up Queue");
   });
 
-  it("includes hardened policy keywords shared with install smoke tests", async () => {
+  it("mode files point at the manifest and do not paste the self-check table", () => {
     const repoRoot = resolveDistributionRepoRoot(path.join(__dirname, ".."));
-    const content = await loadInstructions({
-      cwd: repoRoot,
-      cursorHome: path.join(repoRoot, ".cursor-missing"),
-    });
-    expect(validateInstructionsPolicy(content)).toEqual([]);
+    const main = readFileSync(path.join(repoRoot, "kodaelus", "modes", "main.md"), "utf8");
+    const bug = readFileSync(path.join(repoRoot, "kodaelus", "modes", "bug.md"), "utf8");
+    const prepare = readFileSync(path.join(repoRoot, "kodaelus", "modes", "prepare.md"), "utf8");
+    expect(main).toContain("policy-manifest.json");
+    expect(main).toContain("<!-- kodaelus:include fragments/delivery-self-check.md#main -->");
+    expect(main).not.toContain("**TDD write order:**");
+    expect(bug).toContain("<!-- kodaelus:include fragments/delivery-self-check.md#bug -->");
+    expect(bug).not.toContain("Before **Outcome Validation**");
+    expect(prepare).toContain("<!-- kodaelus:include fragments/delivery-self-check.md#prepare -->");
+    expect(prepare).not.toContain("**TDD write order:**");
+  });
+});
+
+describe("checkSdkDelivery", () => {
+  it("hard-fails Main text missing Self-Check and Follow-Up Queue", async () => {
+    const result = await checkSdkDelivery("main", "## Plan\nonly a short report");
+    expect(result.hardFail).toBe(true);
+    expect(result.missing).toEqual(
+      expect.arrayContaining(["Delivery Self-Check", "Follow-Up Queue"]),
+    );
+    expect(result.warning).toMatch(/Delivery Self-Check/);
+  });
+
+  it("accepts a Main report that has both sections", async () => {
+    const text = [
+      "## Plan",
+      "Delivery Tier: Full. Confidence: 90% | Evidence: `npm test` -> pass",
+      "## Delivery Self-Check",
+      "| Criterion | Evidence | Result |",
+      "| tests | npm test | Pass |",
+      "## Follow-Up Queue",
+      "- FU-1: later",
+    ].join("\n");
+    const result = await checkSdkDelivery("main", text);
+    expect(result.missing).toEqual([]);
+    expect(result.hardFail).toBe(false);
+    expect(result.warning).toBeNull();
+  });
+
+  it("soft-checks Mode Lite without requiring Follow-Up Queue", async () => {
+    const missing = await checkSdkDelivery("lite", "## Implementation\nonly");
+    expect(missing.hardFail).toBe(false);
+    expect(missing.warning).toMatch(/Mode Lite/);
+    expect(missing.missing.join(" ")).not.toMatch(/Follow-Up Queue/);
+
+    const ok = await checkSdkDelivery(
+      "lite",
+      "## Tests\nnpm test pass\n## Delivery Self-Check\n| Tests | npm test | Pass |",
+    );
+    expect(ok.missing).toEqual([]);
+    expect(ok.hardFail).toBe(false);
+  });
+});
+
+describe("selectTaskModules", () => {
+  it("treats clean-up wording as a logged miss", () => {
+    const match = selectTaskModules("main", "clean up this module");
+    expect(match.included).toEqual([]);
+    expect(match.skipped).toContain("engineering-bar");
+    expect(formatTaskModuleLog(match)).toMatch(/not loaded=.*engineering-bar/);
+    expect(formatTaskModuleLog(match)).toMatch(/best-effort/);
+  });
+
+  it("includes the cursor playbook on a browser smoke task", () => {
+    const match = selectTaskModules("main", "browser smoke the login page");
+    expect(match.included).toContain("tasks/cursor-playbooks.md");
+    expect(selectTaskModules("main", "browser verification of checkout").included).toContain(
+      "tasks/cursor-playbooks.md",
+    );
+    expect(selectTaskModules("main", "multi-root workspace edit").included).toContain(
+      "tasks/cursor-playbooks.md",
+    );
+    expect(selectTaskModules("main", "add a field to the struct").included).not.toContain(
+      "tasks/cursor-playbooks.md",
+    );
+  });
+
+  it("matches delete file, refactor, and architecture review phrases", () => {
+    expect(selectTaskModules("lite", "delete the unused file").included).toContain(
+      "tasks/file-deletion.md",
+    );
+    expect(selectTaskModules("main", "refactor the parser").included).toEqual(
+      expect.arrayContaining(["tasks/refactor.md", "tasks/engineering-bar.md"]),
+    );
+    expect(
+      selectTaskModules("prompt", "architecture review of the boundary").included,
+    ).toContain("tasks/architecture-review.md");
+  });
+
+  it("reads always-packs from the manifest argument, not a hard-coded list", () => {
+    const manifest = {
+      version: 1,
+      modes: {
+        main: {
+          always: ["tasks/from-manifest.md"],
+          tiers: {
+            full: { always: ["tasks/from-manifest.md"] },
+            lite: { always: [] },
+          },
+        },
+        bug: { always: ["tasks/follow-up-queue.md"] },
+      },
+      conditional: [
+        {
+          id: "file-deletion",
+          file: "tasks/file-deletion.md",
+          pattern: "\\b(?:delete|remove)\\b[\\s\\S]{0,40}\\bfiles?\\b",
+          flags: "i",
+        },
+      ],
+    };
+    expect(selectTaskModules("main", "add a field", manifest).always).toEqual([
+      "tasks/from-manifest.md",
+    ]);
+    expect(selectTaskModules("main", "add a field", manifest, { tier: "lite" }).always).toEqual(
+      [],
+    );
+    const bug = selectTaskModules("bug", "investigate the flake", manifest);
+    expect(bug.always).toEqual(["tasks/follow-up-queue.md"]);
+    expect(bug.included).not.toContain("tasks/file-deletion.md");
+  });
+
+  it("keeps Mode Lite activation on the Full pack unless Delivery Tier Lite is named", () => {
+    expect(inferDeliveryTier("use kodaelus lite", undefined)).toBe("full");
+    expect(inferDeliveryTier("Delivery Tier: Lite docs tweak", undefined)).toBe("lite");
+    expect(inferDeliveryTier("anything", "lite")).toBe("lite");
   });
 });
 

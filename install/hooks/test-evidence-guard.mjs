@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * User-level Cursor hook: soft-gate test evidence on Main/Prepare stop when
- * Implementation occurred.
+ * User-level Cursor hook: soft-gate test evidence on Main/Prepare/Mode Lite stop when
+ * Implementation occurred. Mode Lite uses the same loop_limit follow-up, not Full structure.
  * Events: afterAgentResponse (log), stop (follow-up)
  */
 import { isSubstantiveResponse } from "./lib/confidence-format.mjs";
@@ -15,7 +15,7 @@ import {
   isSessionActive,
 } from "./lib/session-store.mjs";
 
-const CHECKED_MODES = new Set(["main", "prepare"]);
+const CHECKED_MODES = new Set(["main", "prepare", "lite", "ship"]);
 
 async function readInput() {
   const chunks = [];

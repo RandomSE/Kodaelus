@@ -103,12 +103,30 @@ export function denyPrepareFixCycle(relativePath, fixCycleCount) {
   return {
     permission: "deny",
     user_message:
-      `Prepare mode fix-cycle cap reached (${fixCycleCount}/3). ` +
+      `Prepare/Ship fix-cycle cap reached (${fixCycleCount}/3). ` +
       `Product edit denied for "${relativePath}". ` +
-      "Reply **prepare continue** or **allow more fix cycles** to unlock, or exit Prepare. Report **Not ready**.",
+      "Reply **prepare continue**, **ship continue**, or **allow more fix cycles** to unlock. Report **Not ready**.",
     agent_message:
-      `Prepare fix-cycle cap (${fixCycleCount}/3): product edit to "${relativePath}" denied. ` +
-      "Force Not ready; no proposed commit message. User may reply prepare continue.",
+      `Prepare/Ship fix-cycle cap (${fixCycleCount}/3): product edit to "${relativePath}" denied. ` +
+      "Force Not ready. User may reply prepare continue or ship continue.",
+  };
+}
+
+/**
+ * @param {string} relativePath
+ * @param {number} repairCount
+ * @returns {{ permission: 'deny', user_message: string, agent_message: string }}
+ */
+export function denyShipCiRepair(relativePath, repairCount) {
+  return {
+    permission: "deny",
+    user_message:
+      `Ship CI repair cap reached (${repairCount}/3 product fixes after a red check). ` +
+      `Product edit denied for "${relativePath}". ` +
+      "Reply **ship ci continue** to unlock, or stop with Not ready and a Follow-Up Queue.",
+    agent_message:
+      `Ship CI-repair cap (${repairCount}/3): product edit to "${relativePath}" denied. ` +
+      "Do not merge, force-push, or push main/master. Report Not ready.",
   };
 }
 

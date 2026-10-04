@@ -51,6 +51,43 @@ test("isAllowedSuggestShellCommand allows mkdir under suggestions", () => {
   assert.equal(isAllowedSuggestShellCommand("npm install"), false);
 });
 
+test("isAllowedSuggestShellCommand allows gated mkdir wrappers under suggestions only", () => {
+  assert.equal(
+    isAllowedSuggestShellCommand(
+      "if (-not (Test-Path .kodaelus/suggestions)) { mkdir .kodaelus/suggestions }",
+    ),
+    true,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand(
+      "New-Item -ItemType Directory -Force -Path .kodaelus/suggestions",
+    ),
+    true,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand("mkdir -p .kodaelus/suggestions/2026"),
+    true,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand(
+      "if (-not (Test-Path src/new)) { mkdir src/new }",
+    ),
+    false,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand(
+      "New-Item -ItemType Directory -Force -Path src/new",
+    ),
+    false,
+  );
+  assert.equal(
+    isAllowedSuggestShellCommand(
+      "mkdir .kodaelus/suggestions; Remove-Item src",
+    ),
+    false,
+  );
+});
+
 test("isAllowedSuggestShellCommand rejects paths that only contain suggestions substring", () => {
   assert.equal(
     isAllowedSuggestShellCommand("mkdir /home/.kodaelus/suggestions/file"),

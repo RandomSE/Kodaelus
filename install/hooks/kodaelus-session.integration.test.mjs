@@ -147,3 +147,45 @@ test("same-turn: prompt session upgrades to main on contaminated main paste", as
   assert.equal(getSessionMode("conv-sticky-upgrade"), "main");
   deactivateSession("conv-sticky-upgrade");
 });
+
+test("subagentStart maps kodaelus, kodaelus-bug, and kodaelus-prompt when inactive", async () => {
+  const cases = [
+    ["kodaelus", "main"],
+    ["kodaelus-bug", "bug"],
+    ["kodaelus-prompt", "prompt"],
+  ];
+  for (const [subagentType, mode] of cases) {
+    const conversationId = `conv-sub-${subagentType}`;
+    await runSessionHook({
+      hook_event_name: "subagentStart",
+      conversation_id: conversationId,
+      subagent_type: subagentType,
+      workspace_roots: [tempProject],
+    });
+    assert.equal(getSessionMode(conversationId), mode, subagentType);
+    deactivateSession(conversationId);
+  }
+});
+
+test("subagentStart does not overwrite an active session with a different mode", async () => {
+  activateSession("conv-sub-keep", "main");
+  const { stderr } = await runSessionHook({
+    hook_event_name: "subagentStart",
+    conversation_id: "conv-sub-keep",
+    subagent_type: "kodaelus-bug",
+    workspace_roots: [tempProject],
+  });
+  assert.equal(getSessionMode("conv-sub-keep"), "main");
+  assert.match(stderr, /not overwriting/i);
+  deactivateSession("conv-sub-keep");
+});
+
+test("subagentStart ignores types that only contain the kodaelus letters", async () => {
+  await runSessionHook({
+    hook_event_name: "subagentStart",
+    conversation_id: "conv-sub-unknown",
+    subagent_type: "kodaelus-lite",
+    workspace_roots: [tempProject],
+  });
+  assert.equal(getSessionMode("conv-sub-unknown"), null);
+});

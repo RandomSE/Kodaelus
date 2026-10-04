@@ -6,12 +6,15 @@ import test from "node:test";
 import {
   CANONICAL_PURPOSE,
   INSTALL_JOB_ONELINER,
-  validateInstructionsPolicy,
+  validatePolicyTree,
 } from "./instructions-policy-keywords.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const instructionsPath = join(repoRoot, "kodaelus", "instructions.md");
-const instructions = readFileSync(instructionsPath, "utf8");
+const policyRoot = join(repoRoot, "kodaelus");
+const instructions = readFileSync(join(policyRoot, "instructions.md"), "utf8");
+const core = readFileSync(join(policyRoot, "core.md"), "utf8");
+const mainMode = readFileSync(join(policyRoot, "modes", "main.md"), "utf8");
+const liteMode = readFileSync(join(policyRoot, "modes", "lite.md"), "utf8");
 const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const agent = readFileSync(
@@ -27,56 +30,47 @@ const sessionRule = readFileSync(
   "utf8",
 );
 
-test("instructions.md passes shared policy validation", () => {
-  const errors = validateInstructionsPolicy(instructions);
+test("policy tree passes shared validation", () => {
+  const errors = validatePolicyTree(policyRoot);
   assert.deepEqual(errors, [], errors.join("\n"));
 });
 
-test("instructions.md documents detectKodaelusMode for smoke keyword", () => {
+test("core.md documents detectKodaelusMode for smoke keyword", () => {
   assert.ok(
-    instructions.includes("detectKodaelusMode"),
+    core.includes("detectKodaelusMode"),
     "missing detectKodaelusMode - required by HARDENED_POLICY_KEYWORDS",
   );
 });
 
-test("canonical purpose is identical in README, package.json, and instructions.md", () => {
+test("canonical purpose is identical in README, package.json, and core.md", () => {
   assert.equal(pkg.description, CANONICAL_PURPOSE);
   assert.ok(readme.includes(CANONICAL_PURPOSE), "README missing canonical purpose");
-  assert.ok(
-    instructions.includes(CANONICAL_PURPOSE),
-    "instructions.md missing canonical purpose",
-  );
-  const purposeIdx = instructions.indexOf("## Purpose & operating model");
-  const boundsIdx = instructions.indexOf("## Hard Boundaries");
+  assert.ok(core.includes(CANONICAL_PURPOSE), "core.md missing canonical purpose");
+  const purposeIdx = core.indexOf("## Purpose & operating model");
+  const boundsIdx = core.indexOf("## Hard Boundaries");
   assert.ok(purposeIdx >= 0 && purposeIdx < boundsIdx, "Purpose must precede Hard Boundaries");
 });
 
 test("hook-absent contract heading sits after Purpose and before Hard Boundaries", () => {
   const heading = "## Hook-absent contract (cloud / SDK)";
-  const purposeIdx = instructions.indexOf("## Purpose & operating model");
-  const hookIdx = instructions.indexOf(heading);
-  const boundsIdx = instructions.indexOf("## Hard Boundaries");
+  const purposeIdx = core.indexOf("## Purpose & operating model");
+  const hookIdx = core.indexOf(heading);
+  const boundsIdx = core.indexOf("## Hard Boundaries");
   assert.ok(hookIdx >= 0, "missing ## Hook-absent contract (cloud / SDK)");
   assert.ok(
     purposeIdx < hookIdx && hookIdx < boundsIdx,
     "Hook-absent contract must sit after Purpose & operating model and before Hard Boundaries",
   );
-  assert.ok(instructions.includes("Hook-absent contract"), "missing phrase Hook-absent contract");
+  assert.ok(core.includes("Hook-absent contract"), "missing phrase Hook-absent contract");
+  assert.ok(core.includes("project-guidelines.md"), "missing phrase project-guidelines.md");
+  assert.ok(core.includes("TDD write order"), "missing TDD write-order rule");
+  assert.ok(core.includes("emit Plan first"), "hook-absent / Plan-first deny phrase missing");
   assert.ok(
-    instructions.includes("project-guidelines.md"),
-    "missing phrase project-guidelines.md",
-  );
-  assert.ok(instructions.includes("TDD write order"), "missing TDD write-order rule");
-  assert.ok(
-    instructions.includes("emit Plan first"),
-    "hook-absent / Plan-first deny phrase missing",
-  );
-  assert.ok(
-    /final report of the turn/i.test(instructions),
+    /final report of the turn/i.test(core),
     "hook-absent must require Full order on the final report of the turn",
   );
   assert.ok(
-    /Plan-first message is exempt/i.test(instructions),
+    /Plan-first message is exempt/i.test(core),
     "hook-absent must exempt Plan-first from the length >= 500 Full-order rule",
   );
 });
@@ -101,7 +95,8 @@ test("modes tables warn bug investigates and bugfix implements in Main", () => {
   const warning =
     "`use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.";
   assert.ok(readme.includes(warning), "README missing bug vs bugfix warning");
-  assert.ok(instructions.includes(warning), "instructions.md missing bug vs bugfix warning");
+  assert.ok(core.includes(warning), "core.md missing bug vs bugfix warning");
+  assert.ok(instructions.includes(warning), "instructions.md stub missing bug vs bugfix warning");
   assert.ok(skill.includes(warning), "skill missing bug vs bugfix warning");
   assert.ok(sessionRule.includes(warning), "session rule missing bug vs bugfix warning");
 });
@@ -110,11 +105,30 @@ test("user-facing names distinguish Planner/Prompt and Mode Lite vs Delivery Tie
   assert.ok(readme.includes("Planner / Prompt (1)"));
   assert.ok(readme.includes("Mode Lite (4)"));
   assert.ok(readme.includes("Delivery Tier Lite"));
-  assert.ok(instructions.includes("Planner / Prompt"));
-  assert.ok(instructions.includes("### Lite mode (4)"));
-  assert.ok(instructions.includes("Mode Lite (4) vs Delivery Tier Lite"));
-  assert.ok(instructions.includes("### Main mode response structure (default Delivery Tier Full)"));
-  assert.doesNotMatch(instructions, /### Full mode \(default\)/);
+  assert.ok(core.includes("Planner / Prompt"));
+  assert.ok(liteMode.includes("### Lite mode (4)"));
+  assert.ok(core.includes("Mode Lite (4) vs Delivery Tier Lite"));
+  assert.ok(mainMode.includes("### Main mode response structure (default Delivery Tier Full)"));
+  assert.doesNotMatch(mainMode, /### Full mode \(default\)/);
+});
+
+test("mode subagent templates name investigation or a read-only spec", () => {
+  const bugAgent = readFileSync(
+    join(repoRoot, "install", "templates", "kodaelus-bug.agent.md"),
+    "utf8",
+  );
+  const promptAgent = readFileSync(
+    join(repoRoot, "install", "templates", "kodaelus-prompt.agent.md"),
+    "utf8",
+  );
+  assert.match(bugAgent, /investigation/i);
+  assert.match(bugAgent, /dossier/i);
+  assert.doesNotMatch(bugAgent.split("---")[2] ?? bugAgent, /\bimplement/i);
+  const bugDescription = bugAgent.split("---")[1] ?? "";
+  assert.match(bugDescription, /investigation/i);
+  assert.match(bugDescription, /dossier/i);
+  assert.doesNotMatch(bugDescription, /implement/i);
+  assert.match(promptAgent, /read-only paste-ready spec/i);
 });
 
 test("AGENTS.md documents root and SDK tests plus README SDK heading", () => {
