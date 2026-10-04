@@ -1,9 +1,9 @@
-/** @typedef {'main' | 'prompt' | 'bug' | 'suggest' | 'lite' | 'question' | 'prepare'} KodaelusMode */
+/** @typedef {'main' | 'prompt' | 'bug' | 'suggest' | 'lite' | 'question' | 'prepare' | 'ship'} KodaelusMode */
 
 const DEACTIVATE =
   /\b(stop|disable|exit|end|leave)\s+kodaelus\b|\bnormal\s+mode\b|\bwithout\s+kodaelus\b/i;
 
-export const MUTATING_MODES = new Set(["main", "lite", "prepare"]);
+export const MUTATING_MODES = new Set(["main", "lite", "prepare", "ship"]);
 export const READ_ONLY_MODES = new Set(["prompt", "suggest", "question"]);
 
 /** Max chars scanned in the leading activation preamble. */
@@ -37,7 +37,7 @@ const MUTATING_UPGRADE_PATTERNS = [
     mode: "main",
     // Bare `use kodaelus` / `use kodaelus` + non-mode words; exclude qualified modes.
     pattern:
-      /\b(use|with|activate|enable|switch to)\s+kodaelus\b(?!\s+(0|main|1|p|prompt|2|b|bug|suggest|3|lite|4|fast|q|question|5|prepare|prep|6)\b)/gi,
+      /\b(use|with|activate|enable|switch to)\s+kodaelus\b(?!\s+(0|main|1|p|prompt|2|b|bug|suggest|3|lite|4|fast|q|question|5|prepare|prep|6|ship|7)\b)/gi,
   },
   {
     mode: "lite",
@@ -49,6 +49,11 @@ const MUTATING_UPGRADE_PATTERNS = [
     pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(prepare|prep|6)\b/gi,
   },
   { mode: "prepare", pattern: /\bkodaelus\s+prepare\s+mode\b/gi },
+  {
+    mode: "ship",
+    pattern: /\b(use|with|activate|enable|switch to)\s+kodaelus\s+(ship|7)\b/gi,
+  },
+  { mode: "ship", pattern: /\bkodaelus\s+ship\s+mode\b/gi },
 ];
 
 /**

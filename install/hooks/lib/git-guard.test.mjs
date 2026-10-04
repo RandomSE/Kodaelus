@@ -88,3 +88,36 @@ test("IDE default still blocks mutating git including gh pr create", () => {
   deny("gh pr create");
   deny("git commit -m msg");
 });
+
+test("ship allowlist permits commit, push, and PR read/create", () => {
+  const shipAllow = (command) =>
+    assert.equal(isBlockedGitShellCommand(command, { ship: true }), false, command);
+  const shipDeny = (command) =>
+    assert.equal(isBlockedGitShellCommand(command, { ship: true }), true, command);
+
+  shipAllow("git status");
+  shipAllow("git diff");
+  shipAllow("git log -5");
+  shipAllow("git branch ship-lane");
+  shipAllow("git checkout -b ship-lane");
+  shipAllow("git switch -c ship-lane");
+  shipAllow("git add README.md");
+  shipAllow("git commit -m msg");
+  shipAllow("git push -u origin HEAD");
+  shipAllow("gh pr create --title t --body b");
+  shipAllow("gh pr view --json url");
+  shipAllow("gh pr checks");
+  shipAllow("gh pr status");
+  shipAllow("gh run list");
+  shipAllow("gh run view 1");
+
+  shipDeny("git push --force");
+  shipDeny("git push --force-with-lease");
+  shipDeny("git push origin main");
+  shipDeny("git push origin master");
+  shipDeny("git reset --hard");
+  shipDeny("git rebase -i HEAD~2");
+  shipDeny("git config user.email x");
+  shipDeny("gh pr merge");
+  shipDeny("gh auth login");
+});

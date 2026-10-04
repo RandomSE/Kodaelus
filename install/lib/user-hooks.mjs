@@ -28,6 +28,7 @@ const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/test-evidence-guard.mjs",
   "node ./hooks/shell-evidence-recorder.mjs",
   "node ./hooks/tdd-order-guard.mjs",
+  "node ./hooks/recommendation-insights-guard.mjs",
 ]);
 
 /** Relative paths under ~/.cursor/hooks removed on uninstall. */
@@ -49,6 +50,7 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "test-evidence-guard.mjs",
   "shell-evidence-recorder.mjs",
   "tdd-order-guard.mjs",
+  "recommendation-insights-guard.mjs",
   "lib/session-store.mjs",
   "lib/git-guard.mjs",
   "lib/entry-point-guard.mjs",
@@ -75,6 +77,7 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "lib/test-evidence-guard.mjs",
   "lib/tdd-order-guard.mjs",
   "lib/cloud-runtime.mjs",
+  "lib/recommendation-insights-guard.mjs",
 ];
 
 export function mergeHooks(existing, template) {

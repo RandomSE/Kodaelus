@@ -36,11 +36,18 @@ test("main/bug require Self-Check and final Follow-Up Queue", () => {
   );
 });
 
-test("prepare requires verdict; Follow-Up when Not ready or capped", () => {
-  const ready = "## Verdict\nReady\n## Proposed commit message\nchore: x\n";
+const prepareSelfCheck = [
+  "## Delivery Self-Check",
+  "| Criterion | Evidence | Result |",
+  "| suite | npm test | Pass |",
+].join("\n");
+
+test("prepare requires verdict and Self-Check; Follow-Up when Not ready or capped", () => {
+  const ready = `${prepareSelfCheck}\n## Verdict\nReady\n## Proposed commit message\nchore: x\n`;
   assert.deepEqual(findMissingDeliverySections("prepare", ready), []);
   const notReady = "## Verdict\nNot ready\n";
   assert.ok(findMissingDeliverySections("prepare", notReady).includes("Follow-Up Queue"));
+  assert.ok(findMissingDeliverySections("prepare", notReady).includes("Delivery Self-Check"));
   const cappedReady = "## Verdict\nReady\n## Proposed commit message\nfoo\n";
   const missing = findMissingDeliverySections("prepare", cappedReady, {
     prepareCapped: true,
@@ -50,6 +57,7 @@ test("prepare requires verdict; Follow-Up when Not ready or capped", () => {
 
 test("prepare Not ready requires Follow-Up Queue as final section", () => {
   const wrongOrder = [
+    prepareSelfCheck,
     "## Verdict",
     "Not ready",
     "## Follow-Up Queue",
@@ -64,6 +72,7 @@ test("prepare Not ready requires Follow-Up Queue as final section", () => {
   );
 
   const finalOk = [
+    prepareSelfCheck,
     "## Verdict",
     "Not ready",
     "## Handoff",
@@ -72,6 +81,62 @@ test("prepare Not ready requires Follow-Up Queue as final section", () => {
     "- FU-1: fix remaining",
   ].join("\n");
   assert.deepEqual(findMissingDeliverySections("prepare", finalOk), []);
+});
+
+test("lite soft-gate requires Tests and Self-Check, not Follow-Up Queue", () => {
+  const missing = findMissingDeliverySections("lite", "## Implementation\nonly");
+  assert.ok(missing.includes("Tests"));
+  assert.ok(missing.includes("Delivery Self-Check"));
+  assert.equal(missing.some((item) => /Follow-Up/i.test(item)), false);
+
+  const ok = [
+    "## Tests",
+    "npm test pass",
+    "## Delivery Self-Check",
+    "| Tests | npm test | Pass |",
+  ].join("\n");
+  assert.deepEqual(findMissingDeliverySections("lite", ok), []);
+  assert.match(buildDeliveryStructureFollowup(missing, "lite"), /Mode Lite/);
+  assert.match(buildDeliveryStructureFollowup(missing, "lite"), /Follow-Up Queue stays omitted/);
+});
+
+test("ship requires verdict and Self-Check; FUQ when Not ready or CI failed", () => {
+  const green = [
+    prepareSelfCheck,
+    "## Verdict",
+    "Ready",
+    "## Commit",
+    "abc123",
+    "## Push",
+    "origin/ship-lane",
+    "## PR",
+    "https://github.com/org/repo/pull/1",
+    "## CI",
+    "pass",
+  ].join("\n");
+  assert.deepEqual(findMissingDeliverySections("ship", green), []);
+
+  const notReady = "## Verdict\nNot ready\n";
+  const missingNotReady = findMissingDeliverySections("ship", notReady);
+  assert.ok(missingNotReady.includes("Follow-Up Queue"));
+  assert.ok(missingNotReady.includes("Delivery Self-Check"));
+
+  const ciFail = [
+    prepareSelfCheck,
+    "## Verdict",
+    "Ready",
+    "## Commit",
+    "abc",
+    "## PR",
+    "https://github.com/org/repo/pull/2",
+    "## CI",
+    "fail",
+  ].join("\n");
+  assert.ok(findMissingDeliverySections("ship", ciFail).includes("Follow-Up Queue"));
+
+  const cappedGreen = findMissingDeliverySections("ship", green, { shipCiCapped: true });
+  assert.ok(cappedGreen.some((item) => /Not ready/i.test(item)));
+  assert.ok(cappedGreen.includes("Follow-Up Queue"));
 });
 
 test("buildDeliveryStructureFollowup mentions mode", () => {

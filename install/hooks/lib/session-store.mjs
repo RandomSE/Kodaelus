@@ -39,6 +39,13 @@ import { dirname, join } from "node:path";
  * @property {number} prepareSuiteAttempts
  * @property {number} prepareFixCycleCount
  * @property {boolean} prepareContinueApproved
+ * @property {number} shipCiRepairCount
+ * @property {boolean} shipCiRepairOpen
+ * @property {boolean} shipCiContinueApproved
+ * @property {number} shipCiPollCount
+ * @property {number} shipCiPendingPolls
+ * @property {string} lastUserPrompt
+ * @property {boolean | null} lastPromptHadExplicitMode
  * @property {ShellEvidenceEntry[]} shellEvidence
  * @property {{ command: string, outcome: string, stdout: string, at: string } | null} firstFailingTest
  */
@@ -63,9 +70,14 @@ export {
 
 const SCOPE_APPROVE = /\b(scope approved|proceed with scope|approve scope)\b/i;
 const PREPARE_CONTINUE =
-  /\b(prepare continue|allow more fix cycles|continue prepare fix(?:es| cycles)?)\b/i;
+  /\b(prepare continue|ship continue|allow more fix cycles|continue prepare fix(?:es| cycles)?)\b/i;
 /** Max fix-rerun cycles before product edits are denied (policy soft cap). */
 export const PREPARE_MAX_FIX_CYCLES = 3;
+/** Product fixes allowed after a red Ship CI check, then `ship ci continue`. */
+export const SHIP_CI_MAX_REPAIRS = 3;
+/** Pending `gh pr checks` / `gh run view` polls before Ship must escalate. */
+export const SHIP_CI_MAX_PENDING_POLLS = 4;
+const SHIP_CI_CONTINUE = /\bship ci continue\b/i;
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_MAX_WAIT_MS = Number(process.env.KODAELUS_STORE_LOCK_MAX_WAIT_MS) || 5_000;
@@ -82,6 +94,13 @@ function emptyMetadata() {
     prepareSuiteAttempts: 0,
     prepareFixCycleCount: 0,
     prepareContinueApproved: false,
+    shipCiRepairCount: 0,
+    shipCiRepairOpen: false,
+    shipCiContinueApproved: false,
+    shipCiPollCount: 0,
+    shipCiPendingPolls: 0,
+    lastUserPrompt: "",
+    lastPromptHadExplicitMode: null,
     shellEvidence: [],
     firstFailingTest: null,
   };
@@ -150,7 +169,8 @@ function normalizeMode(value) {
     value === "suggest" ||
     value === "lite" ||
     value === "question" ||
-    value === "prepare"
+    value === "prepare" ||
+    value === "ship"
   ) {
     return value;
   }
@@ -197,6 +217,23 @@ function normalizeMetadata(raw) {
     base.prepareFixCycleCount = Math.floor(record.prepareFixCycleCount);
   }
   if (record.prepareContinueApproved === true) base.prepareContinueApproved = true;
+  if (typeof record.shipCiRepairCount === "number" && record.shipCiRepairCount >= 0) {
+    base.shipCiRepairCount = Math.floor(record.shipCiRepairCount);
+  }
+  if (record.shipCiRepairOpen === true) base.shipCiRepairOpen = true;
+  if (record.shipCiContinueApproved === true) base.shipCiContinueApproved = true;
+  if (typeof record.shipCiPollCount === "number" && record.shipCiPollCount >= 0) {
+    base.shipCiPollCount = Math.floor(record.shipCiPollCount);
+  }
+  if (typeof record.shipCiPendingPolls === "number" && record.shipCiPendingPolls >= 0) {
+    base.shipCiPendingPolls = Math.floor(record.shipCiPendingPolls);
+  }
+  if (typeof record.lastUserPrompt === "string") {
+    base.lastUserPrompt = record.lastUserPrompt.slice(0, 2000);
+  }
+  if (record.lastPromptHadExplicitMode === true || record.lastPromptHadExplicitMode === false) {
+    base.lastPromptHadExplicitMode = record.lastPromptHadExplicitMode;
+  }
   if (Array.isArray(record.shellEvidence)) {
     base.shellEvidence = record.shellEvidence
       .filter((row) => row && typeof row === "object")
@@ -335,6 +372,49 @@ export function isScopeApprovePrompt(prompt) {
 
 export function isPrepareContinuePrompt(prompt) {
   return typeof prompt === "string" && PREPARE_CONTINUE.test(prompt);
+}
+
+/**
+ * Unlock phrase for the Ship CI-repair cap. Does not match bare `ship continue`.
+ * @param {string} prompt
+ * @returns {boolean}
+ */
+export function isShipCiContinuePrompt(prompt) {
+  return typeof prompt === "string" && SHIP_CI_CONTINUE.test(prompt);
+}
+
+/**
+ * @param {string} command
+ * @param {string} output
+ * @returns {"fail" | "pending" | "pass" | null}
+ */
+export function classifyShipCiPoll(command, output) {
+  if (!/\bgh\s+pr\s+checks\b|\bgh\s+run\s+view\b/i.test(`${command ?? ""}`)) return null;
+  const text = `${output ?? ""}`;
+  if (/\b(fail|failed|failure)\b/i.test(text)) return "fail";
+  if (/\bpending\b|\bin_progress\b|\bqueued\b/i.test(text)) return "pending";
+  if (/\b(pass|passed|success)\b/i.test(text)) return "pass";
+  return null;
+}
+
+/**
+ * Remember the latest user prompt so stop soft-gates can tell activation from natural language.
+ * @param {string} conversationId
+ * @param {string} prompt
+ */
+export function recordPromptContext(conversationId, prompt) {
+  if (!conversationId || typeof prompt !== "string" || !prompt.trim()) return false;
+  const explicit = detectKodaelusMode(prompt) != null;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.lastUserPrompt = prompt.slice(0, 2000);
+    meta.lastPromptHadExplicitMode = explicit;
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
 }
 
 export function isSessionActive(conversationId) {
@@ -548,13 +628,25 @@ export function activateSession(conversationId, mode = "main", suggestSubMode = 
     const meta = store.metadata[conversationId] ?? emptyMetadata();
     if (subMode) meta.suggestSubMode = subMode;
     if (resolvedMode === "suggest" && subMode) meta.suggestSubMode = subMode;
-    if (resolvedMode === "prepare" && previousMode !== "prepare") {
+    const fixCycleMode = resolvedMode === "prepare" || resolvedMode === "ship";
+    const wasFixCycleMode = previousMode === "prepare" || previousMode === "ship";
+    if (fixCycleMode && !wasFixCycleMode) {
       meta.prepareSuiteAttempts = 0;
       meta.prepareFixCycleCount = 0;
       meta.prepareContinueApproved = false;
     }
-    if (resolvedMode !== "prepare") {
+    if (!fixCycleMode) {
       meta.prepareContinueApproved = false;
+    }
+    if (resolvedMode === "ship" && previousMode !== "ship") {
+      meta.shipCiRepairCount = 0;
+      meta.shipCiRepairOpen = false;
+      meta.shipCiContinueApproved = false;
+      meta.shipCiPollCount = 0;
+      meta.shipCiPendingPolls = 0;
+    }
+    if (resolvedMode !== "ship") {
+      meta.shipCiContinueApproved = false;
     }
     store.metadata[conversationId] = meta;
     writeStoreUnlocked(store);
@@ -634,6 +726,99 @@ export function isPrepareFixCycleCapped(conversationId) {
   if (!meta) return false;
   if (meta.prepareContinueApproved) return false;
   return meta.prepareFixCycleCount >= PREPARE_MAX_FIX_CYCLES;
+}
+
+/**
+ * @param {string} conversationId
+ */
+export function approveShipCiContinue(conversationId) {
+  if (!conversationId) return false;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.shipCiContinueApproved = true;
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
+}
+
+/**
+ * @param {string} conversationId
+ * @param {"fail" | "pending" | "pass"} outcome
+ */
+export function recordShipCiPoll(conversationId, outcome) {
+  if (!conversationId) return null;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return null;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.shipCiPollCount += 1;
+    if (outcome === "pass") {
+      meta.shipCiRepairOpen = false;
+      meta.shipCiRepairCount = 0;
+      meta.shipCiPendingPolls = 0;
+      meta.shipCiContinueApproved = false;
+    } else if (outcome === "fail") {
+      if (!meta.shipCiRepairOpen) meta.shipCiRepairCount = 0;
+      meta.shipCiRepairOpen = true;
+      meta.shipCiPendingPolls = 0;
+    } else if (outcome === "pending") {
+      meta.shipCiPendingPolls += 1;
+    }
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return {
+      pollCount: meta.shipCiPollCount,
+      pendingPolls: meta.shipCiPendingPolls,
+      repairCount: meta.shipCiRepairCount,
+    };
+  });
+}
+
+/**
+ * Count one product edit while a CI repair is open. No-op when the cap is already hit.
+ * @param {string} conversationId
+ * @returns {{ capped: boolean, repairCount: number } | null}
+ */
+export function recordShipCiRepairEdit(conversationId) {
+  if (!conversationId) return null;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return null;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    if (!meta.shipCiRepairOpen || meta.shipCiContinueApproved) {
+      return { capped: false, repairCount: meta.shipCiRepairCount };
+    }
+    if (meta.shipCiRepairCount >= SHIP_CI_MAX_REPAIRS) {
+      return { capped: true, repairCount: meta.shipCiRepairCount };
+    }
+    meta.shipCiRepairCount += 1;
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return { capped: false, repairCount: meta.shipCiRepairCount };
+  });
+}
+
+/**
+ * @param {string} conversationId
+ * @returns {boolean}
+ */
+export function isShipCiRepairCapped(conversationId) {
+  const meta = getSessionMetadata(conversationId);
+  if (!meta || meta.shipCiContinueApproved || !meta.shipCiRepairOpen) return false;
+  return meta.shipCiRepairCount >= SHIP_CI_MAX_REPAIRS;
+}
+
+/**
+ * @param {string} conversationId
+ * @returns {boolean}
+ */
+export function isShipCiPollLimited(conversationId) {
+  const meta = getSessionMetadata(conversationId);
+  if (!meta) return false;
+  return meta.shipCiPendingPolls >= SHIP_CI_MAX_PENDING_POLLS;
 }
 
 /**

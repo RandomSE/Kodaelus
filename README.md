@@ -18,9 +18,17 @@ This writes:
 
 | Location | Purpose |
 |----------|---------|
-| `~/.cursor/kodaelus/instructions.md` | Canonical policy (edit on reinstall) |
-| `~/.cursor/agents/kodaelus.md` | Subagent available in all projects |
-| `~/.cursor/skills/kodaelus/SKILL.md` | Skill when you ask for Kodaelus in chat |
+| `~/.cursor/kodaelus/core.md` | Always-on policy (identity, boundaries, confidence, mode routing) |
+| `~/.cursor/kodaelus/modes/` | One file per mode; a turn reads the active mode only |
+| `~/.cursor/kodaelus/tasks/` | Task modules (deletion, refactor, review, TDD, tests, follow-ups) |
+| `~/.cursor/kodaelus/instructions.md` | Short redirect stub |
+| `~/.cursor/agents/kodaelus.md` | Main subagent |
+| `~/.cursor/agents/kodaelus-bug.md` | Bug Investigation subagent (dossier, not the fix) |
+| `~/.cursor/agents/kodaelus-prompt.md` | Planner / Prompt subagent (read-only paste-ready spec) |
+| `~/.cursor/skills/kodaelus/SKILL.md` | Router skill: read core, then one mode file |
+| `~/.cursor/skills/kodaelus-file-deletion/` | Deletion protocol skill |
+| `~/.cursor/skills/kodaelus-refactor/` | Refactor workflow skill |
+| `~/.cursor/skills/kodaelus-architecture-review/` | Architecture review skill |
 | `~/.cursor/rules/kodaelus-session.mdc` | Session lock rule (keeps Kodaelus active in chat) |
 | `~/.cursor/hooks.json` + `~/.cursor/hooks/` | Git block, delete guards, scope creep, session tracking |
 
@@ -48,7 +56,7 @@ Example `.kodaelus/instructions.md` (created automatically on first technical ta
 ```markdown
 # Project guidelines (Kodaelus)
 
-Supplemental guidelines for this repository. Read together with global Kodaelus policy.
+Supplemental guidelines for this repository. Read together with global Kodaelus policy: `~/.cursor/kodaelus/core.md`. `instructions.md` in that directory is a redirect stub.
 
 ## Preferences
 
@@ -73,6 +81,7 @@ Pick the mode that matches your intent, then say the activation phrase.
 - **Hard bug, do not patch yet** -> **Bug Investigation (2)** (`use kodaelus bug`)
 - **Tiny edit** -> **Mode Lite (4)** (`use kodaelus lite`)
 - **About to commit** -> **Prepare (6)** (`use kodaelus prepare`)
+- **Commit, push, and open a PR** -> **Ship (7)** (`use kodaelus ship`)
 - **What's wrong / what to build** -> **Suggest (3)** (`use kodaelus suggest`)
 - **Just explain** -> **Question (5)** (`use kodaelus question`)
 
@@ -89,7 +98,10 @@ Pick the mode that matches your intent, then say the activation phrase.
 | **Mode Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only |
 | **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep research Q&A (read-only) |
 | **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commits) |
+| **Ship (7)** | `use kodaelus ship`, `use kodaelus 7`, `kodaelus ship mode` | Prepare gate, then commit, push, open or reuse a PR, and report CI. No force-push. |
 | **Upgrade** | `run it`, `execute`, `use kodaelus main` | Switch to Main; consume dossier/prompt |
+
+Ship reports CI. When checks fail, it may repair up to 3 product cycles (pull `gh run view` or `gh pr checks`, fix, re-test, commit, push, re-poll), then it stops until `ship ci continue`. Pending checks are polled at most 4 times (backoff 15s, then 30s, then 60s). Ship is not an open-ended babysitter. It never merges, force-pushes, or pushes `main` or `master`.
 
 **Mode Lite (4)** is an activation phrase for fast edits. **Delivery Tier Lite** is a shorter section set within a mode -- they are different concepts.
 
@@ -138,9 +150,24 @@ The SDK is for **programmatic runs with policy preloaded**, not a full replaceme
 
 ### Cursor cloud and SDK (no IDE hooks)
 
-Cursor cloud agents and SDK `runKodaelus` do not load `~/.cursor/hooks.json`, so dash, confidence, structure, and git guards never fire. The **Hook-absent contract** in `kodaelus/instructions.md` (`## Hook-absent contract (cloud / SDK)`) still applies: Plan before the first mutating write (`emit Plan first`), TDD write order including a failing test run before impl, honor-system dash / confidence / AskQuestion / deletion rules. Progress may be one short sentence. The Plan-first message is exempt from the length >= 500 Full-order rule. Only the final report of the turn uses Main Full section order. Cloud and SDK runners may commit when the platform must ship; Cursor IDE remains git-read-only via hooks.
+Cursor cloud agents and SDK `runKodaelus` do not load `~/.cursor/hooks.json`, so dash, confidence, structure, and git guards never fire in the IDE hook host. The **Hook-absent contract** in `kodaelus/core.md` (`## Hook-absent contract (cloud / SDK)`) still applies: Plan before the first mutating write (`emit Plan first`), TDD write order including a failing test run before impl, honor-system dash / confidence / AskQuestion / deletion rules. Progress may be one short sentence. The Plan-first message is exempt from the length >= 500 Full-order rule. Only the final report of the turn uses Main Full section order. SDK `runKodaelus` reuses `install/hooks/lib/delivery-structure-guard.mjs` on the final result text: Main, Bug, Prepare, and Ship missing sections are a hard check (stderr warning and exit code 2); Mode Lite is a soft check (Tests + Delivery Self-Check, no Follow-Up Queue). Cloud agents that are not the SDK runner still self-enforce structure. Cloud and SDK runners may commit when the platform must ship. In the IDE, Ship (`use kodaelus ship`) is the mode that may commit, push, and open a PR. Other IDE modes stay git-read-only via hooks. Re-run `npm run install:global` after Ship hooks land so the allowlist is the installed copy.
 
-**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after upgrading Kodaelus to refresh hooks (needed for `block-readonly-shell`, `ask-question-guard`, and other new hooks). Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent — it should be denied — then **`stop kodaelus`**. If a long `use kodaelus main` paste stays read-only, confirm the activation line is first, then re-run install:global.
+**Troubleshooting:** If a delete is blocked, check Hooks output for backup/manifest errors. Restore via `restore <file>` or SDK `npm run restore`. Re-run **`npm run install:global`** after this policy split (core, modes, tasks, manifest, and the new subagents) and after any hook change. Suggest persistence is the installed copy of `scope-creep-guard`, `path-allowlist`, and `block-readonly-shell`: Write/StrReplace under `.kodaelus/suggestions/**` is allowed (including Cursor `file_path` and OneDrive `\\?\` paths that still contain that tree), and product paths stay denied with the suggestions allowlist message. A generic "suggest mode is read-only" deny on a suggestions Write means the installed hook is stale or path extraction failed; re-run `npm run install:global` so `~/.cursor/hooks` matches this repo, then retry. Product-path denies should name `.kodaelus/suggestions/`, not claim Suggest can never Write. Smoke-check: activate **`use kodaelus 1`**, try `mkdir tmp-kodaelus-smoke` in the agent. It should be denied. Then **`stop kodaelus`**. If a long `use kodaelus main` paste stays read-only, confirm the activation line is first, then re-run install:global.
+
+### Enable AskQuestion fail-closed (only after Cursor confirms)
+
+`ASK_QUESTION_HOOK_FAIL_CLOSED_READY` stays false. Current Cursor often skips `preToolUse` for AskQuestion / AskUserQuestion, so a stop heuristic is the gate that actually runs. Do not claim full fail-closed. Ship stays in the deny set either way.
+
+Checked procedure. Flip the flag only after step 2 is true:
+
+1. Start a mutating Kodaelus session (`use kodaelus main`).
+2. Invoke AskQuestion. In Hooks output, confirm `ask-question-guard` ran on `preToolUse` and denied the call.
+3. Only after that deny is visible, set `ASK_QUESTION_HOOK_FAIL_CLOSED_READY` to true in `install/hooks/lib/ask-question-guard.mjs`.
+4. Add `"failClosed": true` on the preToolUse `ask-question-guard.mjs` entry in `install/templates/hooks.json` (matcher `AskQuestion|AskUserQuestion`).
+5. Run `npm test`, then `npm run install:global`.
+6. Invoke AskQuestion again and confirm the tool is denied.
+
+Until step 2 shows a preToolUse deny, leave the flag false and leave `failClosed` off that hook entry.
 
 ### Architecture Improvement Review
 
@@ -156,7 +183,11 @@ To execute queued work, say **implement suggestions**, **implement follow-ups**,
 
 | Path | Purpose |
 |------|---------|
-| `kodaelus/instructions.md` | Source policy (copied on install) |
+| `kodaelus/core.md` | Always-on policy copied on install |
+| `kodaelus/policy-manifest.json` | Mode task packs, tier omissions, and self-check fragments |
+| `kodaelus/modes/` | Per-mode response structure |
+| `kodaelus/tasks/` | Task modules loaded only when the active mode says they match |
+| `kodaelus/instructions.md` | Redirect stub (not the full policy) |
 | `install/` | Global installer |
 | `sdk/` | TypeScript SDK runner + tests |
 | `.cursor/agents/kodaelus.mdc` | Optional stub in this repo only |

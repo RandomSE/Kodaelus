@@ -1,6 +1,6 @@
 # Project guidelines (Kodaelus)
 
-Supplemental guidelines for this repository. Read together with global Kodaelus policy (`~/.cursor/kodaelus/instructions.md`).
+Supplemental guidelines for this repository. Read together with global Kodaelus policy: `~/.cursor/kodaelus/core.md`, one `modes/<active>.md`, and `policy-manifest.json`. `instructions.md` in that directory is a redirect stub.
 
 **Precedence:** Project guidelines override global policy on conflicts **except** safety-critical items (global always wins): git restrictions, File Deletion Protocol, scope creep guardrail, hook-enforced confidence format, and sub-70% delivery fail rules.
 

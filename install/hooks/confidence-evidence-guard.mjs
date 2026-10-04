@@ -12,7 +12,7 @@ import {
   isSessionActive,
 } from "./lib/session-store.mjs";
 
-const CHECKED_MODES = new Set(["main", "lite", "bug", "suggest", "question", "prepare"]);
+const CHECKED_MODES = new Set(["main", "lite", "bug", "suggest", "question", "prepare", "ship"]);
 
 async function readInput() {
   const chunks = [];
@@ -61,7 +61,7 @@ try {
     `Kodaelus confidence-evidence guard: ${violations.length} bare Confidence score(s) without Evidence.`,
   );
 
-  if (event === "stop" && (mode === "main" || mode === "lite" || mode === "prepare")) {
+  if (event === "stop" && (mode === "main" || mode === "lite" || mode === "prepare" || mode === "ship")) {
     process.stdout.write(
       JSON.stringify({
         followup_message:

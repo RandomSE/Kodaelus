@@ -74,13 +74,19 @@ export function detectPrepareVerdict(text) {
 /**
  * @param {string} mode
  * @param {string} text
- * @param {{ prepareCapped?: boolean }} [options]
+ * @param {{ prepareCapped?: boolean, shipCiCapped?: boolean }} [options]
  * @returns {string[]}
  */
 export function findMissingDeliverySections(mode, text, options = {}) {
   /** @type {string[]} */
   const missing = [];
   const body = `${text ?? ""}`;
+
+  if (mode === "lite") {
+    if (!/##\s*Tests\b/i.test(body)) missing.push("Tests");
+    if (!hasDeliverySelfCheck(body)) missing.push("Delivery Self-Check");
+    return missing;
+  }
 
   if (mode === "main" || mode === "bug") {
     if (!hasDeliverySelfCheck(body)) missing.push("Delivery Self-Check");
@@ -95,6 +101,7 @@ export function findMissingDeliverySections(mode, text, options = {}) {
   }
 
   if (mode === "prepare") {
+    if (!hasDeliverySelfCheck(body)) missing.push("Delivery Self-Check");
     const verdict = detectPrepareVerdict(body);
     if (!verdict.hasVerdictSection) {
       missing.push("Ready vs Not ready verdict");
@@ -113,7 +120,55 @@ export function findMissingDeliverySections(mode, text, options = {}) {
     }
   }
 
+  if (mode === "ship") {
+    if (!hasDeliverySelfCheck(body)) missing.push("Delivery Self-Check");
+    const verdict = detectPrepareVerdict(body);
+    if (!verdict.hasVerdictSection) {
+      missing.push("Ready vs Not ready verdict");
+    }
+    const ci = shipCiOutcome(body);
+    if (verdict.ready) {
+      if (!/##\s*Commit\b/i.test(body)) missing.push("Commit");
+      if (!/##\s*Push\b/i.test(body)) missing.push("Push");
+      if (!/##\s*(?:PR|Pull request)\b/i.test(body)) missing.push("PR");
+      if (!/https?:\/\/\S+/i.test(body)) missing.push("PR link");
+      if (ci === "missing") missing.push("CI status");
+    }
+    if (options.prepareCapped && verdict.ready) {
+      missing.push("Not ready (required when prepare fix-cycle cap reached)");
+    }
+    if (options.shipCiCapped && verdict.ready) {
+      missing.push("Not ready (required when ship CI-repair cap reached)");
+    }
+    const needsFollowUp =
+      options.prepareCapped ||
+      options.shipCiCapped ||
+      verdict.notReady ||
+      ci === "fail" ||
+      ci === "pending";
+    if (needsFollowUp) {
+      if (!hasFollowUpQueue(body)) missing.push("Follow-Up Queue");
+      else if (!isFollowUpQueueFinalSection(body)) {
+        missing.push("Follow-Up Queue (must be final section)");
+      }
+    }
+  }
+
   return missing;
+}
+
+/**
+ * @param {string} body
+ * @returns {"pass" | "fail" | "pending" | "missing"}
+ */
+function shipCiOutcome(body) {
+  const match = body.match(/##\s*CI\b[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i);
+  if (!match) return "missing";
+  const section = match[1];
+  if (/\b(fail|failed|failure)\b/i.test(section)) return "fail";
+  if (/\bpending\b/i.test(section)) return "pending";
+  if (/\b(pass|passed|green|success)\b/i.test(section)) return "pass";
+  return "missing";
 }
 
 /**
@@ -124,6 +179,19 @@ export function findMissingDeliverySections(mode, text, options = {}) {
  */
 export function buildDeliveryStructureFollowup(missing, mode, loopCount = 0) {
   const list = missing.join("; ");
+  if (mode === "lite") {
+    return (
+      `Kodaelus delivery-structure guard (Mode Lite, abbreviated, loop_limit soft follow-up): missing ${list}. ` +
+      "Add ## Tests and a short ## Delivery Self-Check. Follow-Up Queue stays omitted unless the change is non-trivial."
+    );
+  }
+  if (mode === "ship") {
+    return (
+      `Kodaelus delivery-structure guard (Ship): missing ${list}. ` +
+      "Include Delivery Self-Check, a Ready or Not ready verdict, and Commit, Push, PR, and CI when Ready. " +
+      "Follow-Up Queue is required when Not ready or CI failed, and omitted when Ready and CI is green."
+    );
+  }
   if (loopCount >= 1) {
     return (
       `Kodaelus delivery-structure guard: still missing required sections for ${mode} mode: ${list}. ` +

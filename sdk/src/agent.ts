@@ -1,7 +1,8 @@
 import path from "node:path";
 import { Agent, CursorAgentError, type RunResult } from "@cursor/sdk";
 import {
-  loadInstructionsWithProjectGuidelines,
+  checkSdkDelivery,
+  loadPolicyForMode,
   wrapTaskWithInstructions,
 } from "./instructions.js";
 import { detectKodaelusMode } from "./mode-detect.js";
@@ -35,8 +36,9 @@ export async function runKodaelus(
   for (const warning of preflight.warnings) {
     console.error(`[kodaelus] preflight: ${warning}`);
   }
-  const instructions = await loadInstructionsWithProjectGuidelines({
+  const instructions = await loadPolicyForMode(mode, {
     cwd: projectCwd,
+    task: options.task,
   });
   const policy = `${buildModeHeader(mode)}\n\n${instructions}`;
   const prompt = wrapTaskWithInstructions(policy, options.task);
@@ -71,6 +73,16 @@ export async function runKodaelus(
     const result = await run.wait();
     if (result.status === "error") {
       console.error(`\n[kodaelus] run failed: ${result.id}`);
+      process.exitCode = 2;
+    }
+    const delivery = await checkSdkDelivery(mode, result.result ?? "");
+    if (delivery.warning) {
+      console.error(`[kodaelus] delivery: ${delivery.warning}`);
+    }
+    if (delivery.hardFail) {
+      console.error(
+        `[kodaelus] delivery check failed for ${mode}: ${delivery.missing.join(", ")}`,
+      );
       process.exitCode = 2;
     }
     return { agentId, runId, result };

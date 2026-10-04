@@ -9,11 +9,14 @@ import {
   isTestLikeShellCommand,
 } from "./lib/test-evidence-guard.mjs";
 import {
+  classifyShipCiPoll,
   getSessionMode,
   isSessionActive,
   recordFirstFailingTest,
   recordPrepareSuiteAttempt,
   recordShellEvidence,
+  recordShipCiPoll,
+  SHIP_CI_MAX_PENDING_POLLS,
 } from "./lib/session-store.mjs";
 import { isFailingTestOutcome } from "./lib/tdd-order-guard.mjs";
 
@@ -58,15 +61,27 @@ try {
 
   const mode = getSessionMode(conversationId) ?? "main";
 
-  if (isTestLikeShellCommand(command) && (mode === "main" || mode === "prepare" || mode === "lite" || mode === "bug")) {
+  if (isTestLikeShellCommand(command) && (mode === "main" || mode === "prepare" || mode === "lite" || mode === "bug" || mode === "ship")) {
     recordShellEvidence(conversationId, command, outcome);
     if (isFailingTestOutcome(outcome)) {
       recordFirstFailingTest(conversationId, { command, outcome, stdout });
     }
   }
 
-  if (mode === "prepare" && isFullSuiteShellCommand(command)) {
+  if ((mode === "prepare" || mode === "ship") && isFullSuiteShellCommand(command)) {
     recordPrepareSuiteAttempt(conversationId);
+  }
+
+  if (mode === "ship") {
+    const kind = classifyShipCiPoll(command, `${outcome}\n${stdout}`);
+    if (kind) {
+      const recorded = recordShipCiPoll(conversationId, kind);
+      if (kind === "pending" && recorded && recorded.pendingPolls >= SHIP_CI_MAX_PENDING_POLLS) {
+        console.error(
+          "Kodaelus Ship: pending CI poll limit (4). Stop polling and report pending with Follow-Up Queue.",
+        );
+      }
+    }
   }
 } catch (err) {
   console.error(

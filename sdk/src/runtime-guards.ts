@@ -16,7 +16,8 @@ export type KodaelusModeName =
   | "suggest"
   | "lite"
   | "question"
-  | "prepare";
+  | "prepare"
+  | "ship";
 
 const READ_ONLY_MODES = new Set<KodaelusModeName>([
   "prompt",
@@ -35,7 +36,14 @@ export function describeSdkLimitations(): string {
 export function buildModeHeader(mode: KodaelusModeName): string {
   const lines = [`## Kodaelus mode: ${mode}`];
 
-  if (READ_ONLY_MODES.has(mode)) {
+  if (mode === "suggest") {
+    lines.push(
+      "",
+      "Suggest mode may Write/StrReplace under `.kodaelus/suggestions/**` and mkdir that tree. " +
+        "Product paths stay forbidden. " +
+        "Upgrade phrasing for a full implementation run: `use kodaelus main` or `use kodaelus lite`.",
+    );
+  } else if (READ_ONLY_MODES.has(mode)) {
     lines.push(
       "",
       "This task is read-only in SDK policy terms - do not mutate project files. " +
@@ -58,6 +66,16 @@ export function buildModeHeader(mode: KodaelusModeName): string {
     );
   }
 
+  if (mode === "ship") {
+    lines.push(
+      "",
+      "Ship mode - same pre-commit gate as Prepare, then commit, push (no force, not main/master), " +
+        "open or reuse a PR, and report CI. After a red check, repair at most 3 product cycles, then stop until ship ci continue. " +
+        "Pending polls stop at 4. If the branch is main or master, create a branch first. " +
+        "This is the IDE path that matches the cloud/SDK permission to commit. Do not merge.",
+    );
+  }
+
   return lines.join("\n");
 }
 
@@ -71,7 +89,8 @@ export function normalizeDetectedMode(
     mode === "suggest" ||
     mode === "lite" ||
     mode === "question" ||
-    mode === "prepare"
+    mode === "prepare" ||
+    mode === "ship"
   ) {
     return mode;
   }
@@ -97,6 +116,12 @@ export function runSdkPreflight(options: SdkPreflightOptions): SdkPreflightResul
   if (options.mode === "prepare") {
     warnings.push(
       "Prepare mode - full suite + commit message proposal only; SDK cannot enforce git read-only. Use Cursor IDE for hard git guards.",
+    );
+  }
+
+  if (options.mode === "ship") {
+    warnings.push(
+      "Ship mode - IDE Ship may commit, push, and open a PR under the allowlist. The SDK cannot enforce that allowlist.",
     );
   }
 

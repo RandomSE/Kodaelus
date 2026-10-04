@@ -8,7 +8,7 @@ alwaysApply: true
 When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:
 
 - The user activated Kodaelus (any mode, see mode table below).
-- The **kodaelus** subagent was selected or invoked (Main mode).
+- The **kodaelus** subagent was selected (Main), **kodaelus-bug** (Bug Investigation), or **kodaelus-prompt** (Planner / Prompt).
 
 ## Modes
 
@@ -23,21 +23,26 @@ When **any** of these happened in this conversation, Kodaelus is **active until 
 | **Mode Lite** | 4 | `use kodaelus lite`, `use kodaelus 4`, `kodaelus lite mode`, `use kodaelus fast` |
 | **Question** | 5 | `use kodaelus q`, `use kodaelus question`, `use kodaelus 5` |
 | **Prepare** | 6 | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep`, `kodaelus prepare mode` |
+| **Ship** | 7 | `use kodaelus ship`, `use kodaelus 7`, `kodaelus ship mode` |
+
+**Active mode:** name the sticky mode in Plan and how to switch (`use kodaelus <mode>`). `bug` investigates; `bugfix` implements in Main. A natural-language recommendation does not switch mode.
+
+**Ceremony:** docs-only or single-file recommends Mode Lite or Delivery Tier Lite. About 2-4 tested files recommends Delivery Tier Standard. Full stays the default for bug fixes and features.
 
 **Upgrade:** `run it`, standalone `execute`, or `use kodaelus` / `use kodaelus main` after Planner / Prompt → Main; `use kodaelus bugfix` after Bug Investigation → Main (consume dossier). **Same-turn:** upgrade phrases in the current user message take effect immediately for that turn (hooks persist mode on `beforeSubmitPrompt` before mutating-tool denies); do not require a second upgrade-only message. **Soft stickiness:** on an upgrade message, use the mutating mode response structure this turn even if earlier turns were Planner / Prompt / Suggest / Question. **Fence preamble:** Planner / Prompt Recommended fences must start with the upgrade line, blank line, then activation-safe body (users paste only the fence).
 
 While active:
 
-1. **Read and follow** `~/.cursor/kodaelus/instructions.md` before every substantive response (main agent or subagent), then **`.kodaelus/instructions.md`** when present (see **Project-Specific Guidelines** in global policy).
-2. Apply the Kodaelus **response structure** and **done criteria** for the active mode from that file. If the current message has an explicit mutating upgrade token, apply that mutating mode structure immediately (**soft stickiness**).
-3. **Git is restricted**, only read-only `git status`, `git diff`, and `git log` are allowed; hooks block all other git/gh commands. Do not attempt blocked commands or ask the user to approve them via the agent.
+1. **Read and follow** `~/.cursor/kodaelus/core.md`, then exactly one `~/.cursor/kodaelus/modes/<active>.md`, then the task files and fragments `~/.cursor/kodaelus/policy-manifest.json` lists for that mode. When a fragment is listed, Read `fragments/delivery-self-check.md` (named section). An include marker is a mandatory Read, not invisible HTML. IDE: Read fragments/delivery-self-check.md. Then **`.kodaelus/instructions.md`** when present, and **`.kodaelus/insights.md`** on Main, Prepare, and Ship turns. Do not read every mode file. `instructions.md` in the Kodaelus home is a redirect stub.
+2. Apply the **response structure** and **done criteria** from that one mode file. If the current message has an explicit mutating upgrade token, apply that mutating mode structure immediately (**soft stickiness**).
+3. **Git is restricted.** Modes other than Ship allow only `git status`, `git diff`, and `git log`. Ship may add, commit, push without force (not to main or master), and run `gh pr create`, `gh pr view`, `gh pr checks`, and `gh run list` or `gh run view`. Do not attempt blocked commands or ask the user to approve them via the agent.
 4. Stay in Kodaelus mode across follow-up messages even if the user does not repeat "use Kodaelus".
 5. **Planner / Prompt / Suggest / Question:** read-only, no mutating tools until upgrade to Main, Mode Lite, or Prepare. Suggest may Write/StrReplace (and `mkdir`) under `.kodaelus/suggestions/**` only. Planner / Prompt Recommended fences require a **fence preamble** (upgrade line + blank line + activation-safe body).
 6. In **Bug Investigation mode**, diagnostic writes only (`.kodaelus/**`, `*.test.*`/`*.spec.*`, instrumentation paths); **do not ship the fix** until upgrade to Main.
-7. **Prepare mode:** review changes since HEAD, full suite with max 3 fix-rerun cycles (hook-capped; unlock with **`prepare continue`**), propose commit message only; never create the commit.
-8. **Main** and **Bug Investigation** substantive responses **end with Follow-Up Queue** as the final section (related improvements). Prepare includes Follow-Up Queue only when Not ready. Stop hooks enforce Delivery Self-Check / verdict sections.
-9. Mutating modes (**Main** / **Mode Lite** / **Bug** / **Prepare**): do not call AskQuestion for decisions resolvable by the Cursor clarifying questions resolution priority; log autonomous resolutions with Confidence + Evidence. **Planner / Prompt mode:** include Ambiguity pre-emption and fence preamble in Recommended prompts.
-10. **Hooks enforce:** backup-before-delete, entry-point blocks, scope creep (`scope approved` to unlock), Bug/Suggest path allowlists, Prepare fix-cycle cap, secrets guard, delivery-structure / prompt-fence / test-evidence stop gates, confidence format checks, unicode dash guard (U+2013/U+2014), ask-question-guard (deny AskQuestion when hook fires; stop heuristic for open clarification prose).
+7. **Prepare mode:** review changes since HEAD, full suite with max 3 fix-rerun cycles (hook-capped; unlock with **`prepare continue`**), propose commit message only; never create the commit. **Ship mode:** same gate, then commit, push, open or reuse a PR, and report CI. Unlock the cap with **`ship continue`**. Never force-push. If the branch is main or master, create a branch first.
+8. **Main** and **Bug Investigation** substantive responses **end with Follow-Up Queue** as the final section (related improvements). Prepare includes Follow-Up Queue only when Not ready. Ship includes it when Not ready or CI failed, and omits it when Ready and CI is green. Stop hooks enforce Delivery Self-Check / verdict sections.
+9. Mutating modes (**Main** / **Mode Lite** / **Bug** / **Prepare** / **Ship**): do not call AskQuestion for decisions resolvable by the Cursor clarifying questions resolution priority; log autonomous resolutions with Confidence + Evidence. **Planner / Prompt mode:** include Ambiguity pre-emption and fence preamble in Recommended prompts. A stop follow-up cannot cancel an AskQuestion call that skipped preToolUse. Do not claim full fail-closed.
+10. **Hooks enforce:** backup-before-delete, entry-point blocks, scope creep (`scope approved` to unlock), Bug/Suggest path allowlists, Prepare and Ship fix-cycle cap, secrets guard, delivery-structure / prompt-fence / test-evidence / recommendation-insights stop gates, confidence format checks, unicode dash guard (U+2013/U+2014), ask-question-guard (deny AskQuestion when hook fires; stop heuristic for open clarification prose). The recommendation gate does not change mode.
 
 **Opt out** when the user says: `stop kodaelus`, `disable kodaelus`, `normal mode`, or `without kodaelus`.
 

@@ -4,10 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { detectKodaelusMode } from "./kodaelus-mode.mjs";
-import { findMissingPolicyKeywords } from "./instructions-policy-keywords.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const instructions = readFileSync(join(root, "kodaelus", "instructions.md"), "utf8");
+const core = readFileSync(join(root, "kodaelus", "core.md"), "utf8");
+const promptMode = readFileSync(join(root, "kodaelus", "modes", "prompt.md"), "utf8");
 const skill = readFileSync(join(root, "install", "templates", "kodaelus.skill.md"), "utf8");
 const sessionRule = readFileSync(
   join(root, "install", "templates", "kodaelus-session.rule.mdc"),
@@ -42,14 +42,10 @@ test("handoff: fence preamble use kodaelus main + Main mode (0) body → main", 
 });
 
 test("handoff: policy requires fence preamble and soft stickiness keywords", () => {
-  const missing = findMissingPolicyKeywords(instructions).filter((k) =>
-    ["fence preamble", "Soft stickiness"].includes(k),
-  );
-  assert.deepEqual(missing, []);
-  assert.match(instructions, /fence preamble/i);
-  assert.match(instructions, /soft stickiness/i);
+  assert.match(promptMode, /fence preamble/i);
+  assert.match(core, /soft stickiness/i);
   assert.doesNotMatch(
-    instructions,
+    promptMode,
     /Keep any upgrade phrase \*\*outside\*\* the fenced block/i,
   );
 });

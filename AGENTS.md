@@ -13,13 +13,14 @@ npm run install:global
 ## Use in any repo
 
 - Pick subagent **kodaelus**, or ask to use Kodaelus.
-- Modes: Main (0), Planner / Prompt (1), Bug Investigation (2), Suggest (3), Mode Lite (4), Question (5), Prepare (6).
+- Modes: Main (0), Planner / Prompt (1), Bug Investigation (2), Suggest (3), Mode Lite (4), Question (5), Prepare (6), Ship (7).
 - `use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.
+- Ship reports CI and may repair up to 3 product cycles after a red check (`ship ci continue` unlocks). It does not merge or force-push.
 - No `AGENTS.md` or `.cursor/rules` from this project needed.
 
 ## Policy source
 
-[`kodaelus/instructions.md`](kodaelus/instructions.md) → copied to `~/.cursor/kodaelus/instructions.md` on install.
+[`kodaelus/core.md`](kodaelus/core.md), [`kodaelus/policy-manifest.json`](kodaelus/policy-manifest.json), and [`kodaelus/modes/`](kodaelus/modes/) → copied to `~/.cursor/kodaelus/` on install. [`kodaelus/instructions.md`](kodaelus/instructions.md) is a redirect stub. Re-run `npm run install:global` after policy or hook changes so Suggest writes under `.kodaelus/suggestions/**` use the installed allowlist.
 
 ## SDK (CLI and programmatic API)
 

@@ -16,6 +16,7 @@ import {
   activateSession,
   approvePrepareContinue,
   approveScope,
+  approveShipCiContinue,
   clearSession,
   deactivateSession,
   detectExplicitMutatingUpgradeMode,
@@ -27,8 +28,10 @@ import {
   isDeactivatePrompt,
   isPrepareContinuePrompt,
   isReadOnlyMode,
+  isShipCiContinuePrompt,
   isScopeApprovePrompt,
   isSessionActive,
+  recordPromptContext,
 } from "./lib/session-store.mjs";
 
 async function readInput() {
@@ -49,6 +52,13 @@ function allow() {
   process.stdout.write("{}\n");
   process.exit(0);
 }
+
+/** Exact subagent name to mode. Names that only contain "kodaelus" do not match. */
+const SUBAGENT_MODE = {
+  kodaelus: "main",
+  "kodaelus-bug": "bug",
+  "kodaelus-prompt": "prompt",
+};
 
 const input = await readInput();
 const event = input.hook_event_name ?? "";
@@ -77,10 +87,20 @@ try {
   }
 
   if (event === "subagentStart") {
-    const subagentType = `${input.subagent_type ?? ""}`.toLowerCase();
-    if (subagentType.includes("kodaelus")) {
-      activateSession(conversationId, "main");
-      ensureProjectGuidelines(projectRoot);
+    const subagentType = `${input.subagent_type ?? ""}`.toLowerCase().trim();
+    const mapped = SUBAGENT_MODE[subagentType];
+    if (mapped) {
+      if (isSessionActive(conversationId)) {
+        const current = getSessionMode(conversationId);
+        if (current && current !== mapped) {
+          console.error(
+            `Kodaelus subagentStart: conversation ${conversationId} already active as ${current}; not overwriting with ${mapped} from subagent ${subagentType}.`,
+          );
+        }
+      } else {
+        activateSession(conversationId, mapped);
+        ensureProjectGuidelines(projectRoot);
+      }
     }
     allow();
   }
@@ -91,6 +111,8 @@ try {
       deactivateSession(conversationId);
     } else if (isScopeApprovePrompt(prompt)) {
       approveScope(conversationId);
+    } else if (isShipCiContinuePrompt(prompt) && isSessionActive(conversationId)) {
+      approveShipCiContinue(conversationId);
     } else if (isPrepareContinuePrompt(prompt) && isSessionActive(conversationId)) {
       approvePrepareContinue(conversationId);
     } else {
@@ -110,10 +132,16 @@ try {
         const suggestSubMode = detectSuggestSubMode(prompt);
         activateSession(conversationId, resolved, suggestSubMode);
         ensureProjectGuidelines(projectRoot);
+        if (existsSync(join(projectRoot, ".kodaelus", "insights.md"))) {
+          console.error(
+            "Kodaelus: .kodaelus/insights.md is present. Read it on Main, Prepare, and Ship turns.",
+          );
+        }
       }
     }
 
     if (isSessionActive(conversationId)) {
+      recordPromptContext(conversationId, prompt);
       ensureProjectGuidelines(projectRoot);
       tryRestoreFromPrompt(projectRoot, prompt);
 

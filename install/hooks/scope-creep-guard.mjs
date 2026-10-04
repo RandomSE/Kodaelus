@@ -4,6 +4,7 @@
  * Bug write allowlist + Suggest artifact carve-out + Prepare fix-cycle cap.
  * Events: preToolUse, beforeSubmitPrompt, afterAgentResponse, stop
  */
+import { fileURLToPath } from "node:url";
 import { parseFileCountFromText } from "./lib/plan-estimate.mjs";
 import { resolveProjectRoot } from "./lib/entry-point-guard.mjs";
 import { normalizeProjectPath } from "./lib/deletion-guard.mjs";
@@ -14,6 +15,8 @@ import {
   isSuggestArtifactPath,
   isWriteOrStrReplaceTool,
   isWriteStrReplaceOrPatchTool,
+  resolveSuggestWritePath,
+  suggestionsPathTail,
 } from "./lib/path-allowlist.mjs";
 import {
   approveScope,
@@ -24,6 +27,8 @@ import {
   isMutatingMode,
   isPrepareFixCycleCapped,
   isReadOnlyMode,
+  isShipCiRepairCapped,
+  recordShipCiRepairEdit,
   isScopeApprovePrompt,
   isSessionActive,
   recordTouchedFile,
@@ -34,6 +39,7 @@ import {
   denyPlanFirst,
   denyPrepareFixCycle,
   denyReadOnlyTool,
+  denyShipCiRepair,
   denySuggestArtifactWrite,
   isMutatingToolName,
 } from "./lib/mode-guard.mjs";
@@ -89,6 +95,60 @@ function denyWith(denial) {
   process.exit(0);
 }
 
+const EDIT_PATH_KEYS = [
+  "path",
+  "file_path",
+  "filePath",
+  "target_file",
+  "targetFile",
+  "uri",
+  "notebook_path",
+];
+
+/**
+ * Strip file:// and Windows \\?\ prefixes so OneDrive paths can resolve.
+ * @param {string} value
+ * @returns {string}
+ */
+function stripPathPrefix(value) {
+  let text = `${value ?? ""}`.trim();
+  if (/^file:\/\//i.test(text)) {
+    try {
+      text = fileURLToPath(text);
+    } catch {
+      text = text.replace(/^file:\/\/\/?/i, "");
+    }
+  }
+  if (text.startsWith("\\\\?\\")) {
+    text = text.slice(4);
+  }
+  return text;
+}
+
+/**
+ * @param {string[]} paths
+ * @param {unknown} source
+ */
+function pushEditPathFields(paths, source) {
+  if (!source || typeof source !== "object") return;
+  const record = /** @type {Record<string, unknown>} */ (source);
+  for (const key of EDIT_PATH_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      paths.push(stripPathPrefix(value));
+    }
+  }
+}
+
+/**
+ * When root resolution fails, keep a suggestions suffix if the raw path has one.
+ * @param {string} editPath
+ * @returns {string | null}
+ */
+function suggestionsTail(editPath) {
+  return suggestionsPathTail(editPath);
+}
+
 /**
  * @param {unknown} input
  * @returns {string[]}
@@ -96,7 +156,6 @@ function denyWith(denial) {
 function collectEditPaths(input) {
   if (!input || typeof input !== "object") return [];
   const record = /** @type {Record<string, unknown>} */ (input);
-  const toolName = `${record.tool_name ?? record.toolName ?? ""}`;
   const toolInput =
     record.tool_input ??
     record.toolInput ??
@@ -105,23 +164,14 @@ function collectEditPaths(input) {
     record;
 
   const paths = [];
-  if (toolInput && typeof toolInput === "object") {
-    const ti = /** @type {Record<string, unknown>} */ (toolInput);
-    if (typeof ti.path === "string" && ti.path.trim()) {
-      paths.push(ti.path.trim());
-    }
+  pushEditPathFields(paths, toolInput);
+  if (toolInput !== record) {
+    pushEditPathFields(paths, record);
   }
 
   const patch = extractPatchText(input);
   if (patch) {
-    paths.push(...extractPatchTouchedPaths(patch));
-  }
-
-  if (toolName.includes("MCP") && toolInput && typeof toolInput === "object") {
-    const ti = /** @type {Record<string, unknown>} */ (toolInput);
-    if (typeof ti.path === "string" && ti.path.trim()) {
-      paths.push(ti.path.trim());
-    }
+    paths.push(...extractPatchTouchedPaths(patch).map((item) => stripPathPrefix(item)));
   }
 
   return [...new Set(paths)];
@@ -132,16 +182,30 @@ function collectEditPaths(input) {
  * @param {string[]} editPaths
  * @returns {string[]}
  */
+/**
+ * Root resolution can collapse an out-of-workspace suggestions path to a bare
+ * filename. Keep the suggestions suffix in that case. A real relative path that
+ * already contains the tree (for example evil/.kodaelus/suggestions) stays as-is.
+ * @param {string} rel
+ * @param {string} raw
+ * @returns {string}
+ */
+function preferSuggestionsTail(rel, raw) {
+  return resolveSuggestWritePath(rel, raw);
+}
+
 function toRelativePaths(input, editPaths) {
   if (editPaths.length === 0) return [];
   const projectRoot = resolveProjectRoot(input, editPaths[0]);
   /** @type {string[]} */
   const rels = [];
   for (const editPath of editPaths) {
+    const stripped = stripPathPrefix(editPath);
     try {
-      rels.push(normalizeProjectPath(projectRoot, editPath));
+      rels.push(preferSuggestionsTail(normalizeProjectPath(projectRoot, stripped), stripped));
     } catch {
-      // Skip paths outside project root.
+      const tail = suggestionsTail(stripped);
+      if (tail) rels.push(tail);
     }
   }
   return rels;
@@ -183,10 +247,19 @@ try {
     const editPaths = collectEditPaths(input);
     const relPaths = toRelativePaths(input, editPaths);
 
-    // Suggest: allow Write/StrReplace only under .kodaelus/suggestions/**
+    // Suggest: Write/StrReplace only under .kodaelus/suggestions/**
+    // Empty relPaths must not use the generic read-only deny (that implies Write is impossible).
     if (mode === "suggest" && isMutatingToolName(toolName)) {
-      if (isWriteOrStrReplaceTool(toolName) && relPaths.length > 0) {
-        const blocked = relPaths.find((rel) => !isSuggestArtifactPath(rel));
+      if (isWriteOrStrReplaceTool(toolName)) {
+        let rels = relPaths;
+        if (rels.length === 0) {
+          const tail = suggestionsTail(JSON.stringify(input));
+          if (tail && isSuggestArtifactPath(tail)) {
+            allowTool();
+          }
+          denyWith(denySuggestArtifactWrite(editPaths[0] || "(unresolved path)"));
+        }
+        const blocked = rels.find((rel) => !isSuggestArtifactPath(rel));
         if (blocked) {
           denyWith(denySuggestArtifactWrite(blocked));
         }
@@ -212,7 +285,7 @@ try {
     }
 
     // Prepare fix-cycle cap: deny product edits after 3 fix-rerun cycles
-    if (mode === "prepare" && isWriteStrReplaceOrPatchTool(toolName)) {
+    if ((mode === "prepare" || mode === "ship") && isWriteStrReplaceOrPatchTool(toolName)) {
       if (isPrepareFixCycleCapped(conversationId)) {
         const meta = getSessionMetadata(conversationId);
         const blocked = relPaths.find((rel) => isProductEditPath(rel));
@@ -220,6 +293,16 @@ try {
           denyWith(denyPrepareFixCycle(blocked, meta?.prepareFixCycleCount ?? 3));
         }
       }
+    }
+
+    // Ship CI repair cap: 3 product fixes after a red check, then ship ci continue
+    if (mode === "ship" && isWriteStrReplaceOrPatchTool(toolName)) {
+      const product = relPaths.find((rel) => isProductEditPath(rel));
+      if (product && isShipCiRepairCapped(conversationId)) {
+        const meta = getSessionMetadata(conversationId);
+        denyWith(denyShipCiRepair(product, meta?.shipCiRepairCount ?? 3));
+      }
+      if (product) recordShipCiRepairEdit(conversationId);
     }
 
     if (!isMutatingMode(mode)) {

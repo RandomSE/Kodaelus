@@ -164,6 +164,68 @@ test("2: suggest allows Write under suggestions; denies elsewhere; allows mkdir"
   deactivateSession("conv-suggest");
 });
 
+test("suggest Write uses file_path and unresolved suggestions paths, not generic read-only", async () => {
+  activateSession("conv-suggest-paths", "suggest");
+  mkdirSync(join(tempProject, ".kodaelus", "suggestions"), { recursive: true });
+
+  const filePathAllow = await runHook(scopeHook, {
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-suggest-paths",
+    tool_name: "Write",
+    tool_input: {
+      file_path: join(tempProject, ".kodaelus", "suggestions", "2026-10-02-issues.md"),
+      contents: "| Finding |",
+    },
+    workspace_roots: [tempProject],
+  });
+  assert.deepEqual(JSON.parse(filePathAllow.stdout), { permission: "allow" });
+
+  const unresolved = await runHook(scopeHook, {
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-suggest-paths",
+    tool_name: "Write",
+    tool_input: {
+      path: "\\\\?\\C:\\Users\\someone\\OneDrive\\Desktop\\Repo\\.kodaelus\\suggestions\\2026-10-02-issues.md",
+      contents: "scan",
+    },
+    workspace_roots: [tempProject],
+  });
+  const unresolvedBody = JSON.parse(unresolved.stdout);
+  assert.equal(unresolvedBody.permission, "allow");
+  assert.doesNotMatch(`${unresolvedBody.user_message ?? ""}`, /read-only/i);
+
+  const product = await runHook(scopeHook, {
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-suggest-paths",
+    tool_name: "Write",
+    tool_input: {
+      file_path: join(tempProject, "index.js"),
+      contents: "nope",
+    },
+    workspace_roots: [tempProject],
+  });
+  const productBody = JSON.parse(product.stdout);
+  assert.equal(productBody.permission, "deny");
+  assert.match(productBody.user_message, /\.kodaelus\/suggestions/);
+  assert.doesNotMatch(productBody.user_message, /read-only/i);
+
+  const wrappedMkdir = await runHook(readonlyShellHook, {
+    conversation_id: "conv-suggest-paths",
+    command: "if (-not (Test-Path .kodaelus/suggestions)) { mkdir .kodaelus/suggestions }",
+    workspace_roots: [tempProject],
+  });
+  assert.deepEqual(JSON.parse(wrappedMkdir.stdout), { permission: "allow" });
+
+  const wrappedBad = await runHook(readonlyShellHook, {
+    conversation_id: "conv-suggest-paths",
+    command: "if (-not (Test-Path src/new)) { mkdir src/new }",
+    workspace_roots: [tempProject],
+  });
+  assert.equal(JSON.parse(wrappedBad.stdout).permission, "deny");
+
+  deactivateSession("conv-suggest-paths");
+});
+
 test("3: delivery-structure stop follow-up for main missing sections", async () => {
   activateSession("conv-delivery", "main");
   const { code, stdout } = await runHook(deliveryHook, {
@@ -333,4 +395,41 @@ test("delivery-structure afterAgentResponse does not flag a long Plan-only first
   assert.equal(stopped.code, 2);
   assert.match(JSON.parse(stopped.stdout).followup_message, /Follow-Up Queue|Delivery Self-Check/);
   deactivateSession("conv-plan-only");
+});
+
+test("lite stop soft-gate asks for Tests and Self-Check, not Follow-Up Queue", async () => {
+  activateSession("conv-lite-delivery", "lite");
+  const missing = await runHook(deliveryHook, {
+    hook_event_name: "stop",
+    conversation_id: "conv-lite-delivery",
+    response: "## Implementation\nsmall change only",
+  });
+  assert.equal(missing.code, 2);
+  const followup = JSON.parse(missing.stdout).followup_message;
+  assert.match(followup, /Tests/);
+  assert.match(followup, /Delivery Self-Check/);
+  assert.match(followup, /Follow-Up Queue stays omitted/);
+
+  const ok = await runHook(deliveryHook, {
+    hook_event_name: "stop",
+    conversation_id: "conv-lite-delivery",
+    response: [
+      "## Tests",
+      "node --test lite.test.mjs pass",
+      "## Delivery Self-Check",
+      "| Tests | node --test | Pass |",
+    ].join("\n"),
+  });
+  assert.equal(ok.code, 0);
+
+  recordTouchedFile("conv-lite-delivery", "index.js");
+  const evidence = await runHook(testEvidenceHook, {
+    hook_event_name: "stop",
+    conversation_id: "conv-lite-delivery",
+    response: `## Implementation\n${"y".repeat(100)}\n`,
+  });
+  assert.equal(evidence.code, 2);
+  assert.match(JSON.parse(evidence.stdout).followup_message, /test-evidence/i);
+
+  deactivateSession("conv-lite-delivery");
 });

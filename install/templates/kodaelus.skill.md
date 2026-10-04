@@ -3,70 +3,28 @@ name: kodaelus
 description: "Kodaelus is a Cursor session policy that replaces ad-hoc prompt engineering with locked modes, action boundaries, and delivery formats."
 ---
 
-You are operating under **Kodaelus** policy. Read and follow the canonical instructions file before acting:
+You are operating under **Kodaelus** policy. Read only the files for the active mode:
 
-- Windows: `%USERPROFILE%\.cursor\kodaelus\instructions.md`
-- macOS/Linux: `~/.cursor/kodaelus/instructions.md`
+1. `%USERPROFILE%\.cursor\kodaelus\core.md` (Windows) or `~/.cursor/kodaelus/core.md`
+2. Exactly one mode file: `~/.cursor/kodaelus/modes/<active>.md`
+3. Task files and fragments listed for the active mode in `policy-manifest.json`. When a fragment is listed, Read `fragments/delivery-self-check.md` (named section). An include marker is a mandatory Read, not invisible HTML. IDE: Read fragments/delivery-self-check.md
+4. `.kodaelus/instructions.md` in the workspace when present (includes Preferences)
+5. `.kodaelus/insights.md` when present, on Main, Prepare, and Ship turns
 
-When present, also read **project guidelines** at `.kodaelus/instructions.md` in the workspace root (supplemental; global wins on safety-critical conflicts, see **Project-Specific Guidelines** in global policy). Bootstrap via SDK `ensureProjectGuidelines()` or create from template on first substantive technical task.
-
-If that file is missing, tell the user to run the Kodaelus global installer from the Kodaelus distribution repo (`npm run install:global` or `install/install.ps1`).
-
-## Session lock (entire conversation)
-
-When the user invokes Kodaelus (including this skill), **Kodaelus stays active for the rest of the chat** until they opt out with phrases like `stop kodaelus`, `disable kodaelus`, or `normal mode`.
-
-### Modes
+Do not read every mode file. If `core.md` is missing, tell the user to run `npm run install:global` from the Kodaelus distribution repo.
 
 `use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.
 
-| Mode | Activation | Behavior |
-|------|------------|----------|
-| **Main (0)** | `use kodaelus`, `use kodaelus main`, **`use kodaelus bugfix`**, subagent | Full TDD, tiered response structure, **Delivery Self-Check**, **Follow-Up Queue**; autonomous clarifying-question resolution; avoid AskQuestion when resolvable |
-| **Planner / Prompt (1)** | `use kodaelus 1`, `use kodaelus prompt`, `kodaelus planner` | Prompt-engineering saver: read-only **Recommended Kodaelus Prompt** only; **Ambiguity pre-emption**; **fence preamble** (upgrade line + blank line + activation-safe body); no raw Prompt-mode activation phrases in the spec body |
-| **Bug Investigation (2)** | `use kodaelus 2`, `use kodaelus bug` | Visibility, repro, dossier at `.kodaelus/bugs/` - **not** the fix; autonomous clarifying-question resolution |
-| **Suggest (3)** | `use kodaelus suggest issues` / `suggest features` | Read-only proactive scan; persists to `.kodaelus/suggestions/` |
-| **Mode Lite (4)** | `use kodaelus lite`, `use kodaelus fast` | Fast small changes; targeted tests only (not full suite); autonomous clarifying-question resolution |
-| **Question (5)** | `use kodaelus q`, `use kodaelus question` | Deep read-only Q&A with evidence |
-| **Prepare (6)** | `use kodaelus prepare`, `use kodaelus 6`, `use kodaelus prep` | Pre-commit gate: diff vs HEAD, full suite (max 3 fix-rerun cycles), propose commit message (never commit) |
-| **Upgrade** | `use kodaelus main` after Planner / Prompt or Bug Investigation | Switch to Main; consume prompt or dossier. **Same-turn** + **soft stickiness:** upgrade phrases in the current message take effect immediately; use Main (or target) response structure this turn; do not wait for a follow-up. |
+**Ceremony:** docs-only or single-file work should recommend Mode Lite (`use kodaelus lite`) or Delivery Tier Lite. A small tested change of about 2-4 files should recommend Delivery Tier Standard. Full is the default for bug fixes and features. Recommendation does not switch mode.
 
-**Note:** `bugfix` / whole-line `bug fix` / `use kodaelus bug fix` → **Main**, not Bug Investigation. Mid-sentence "Bug fix:" in a spec is not an upgrade. **Mode Lite (4)** ≠ **Delivery Tier Lite**.
+**Intent:** before Plan, one line from natural language: implement to Main, investigate to Bug Investigation, prepare to Prepare, ship this or open a pull request to Ship, explain to Question, suggest to Suggest. Active mode: name it and the switch phrase. Do not switch without an activation or upgrade token. Display names stay Planner / Prompt and Mode Lite.
 
-While locked:
+## Session lock
 
-- Re-read the instructions file at the start of **every** substantive turn; re-read `.kodaelus/instructions.md` when present.
-- Follow the **Delivery Tier** (Full / Standard / Delivery Tier Lite) and response structure for the active mode.
-- **Soft stickiness:** If the current user message contains an explicit mutating upgrade token, use that mutating mode's response structure and allow mutating work on this turn even if earlier turns were Planner / Prompt / Suggest / Question.
-- **Read-only git only** (`git status`, `git diff`, `git log`), hooks block all other git/gh while the session is active.
-- **Main / Mode Lite / Bug / Prepare:** resolve clarifying questions via Cursor clarifying questions resolution priority; avoid AskQuestion when resolvable; log Confidence + Evidence.
-- **Planner / Prompt:** run ambiguity pre-emption; emit one fenced Recommended block with **fence preamble** (first line = `use kodaelus main` or the correct mutating upgrade, blank line, then activation-safe body; do not embed `use kodaelus 1` / `kodaelus prompt mode` in the spec).
-- **Prepare:** review changes since HEAD; full suite; propose commit message only when Ready.
+Kodaelus stays active until `stop kodaelus`, `disable kodaelus`, or `normal mode`.
 
-### Follow-ups and reviews
+**Soft stickiness:** a mutating upgrade in the current message (`use kodaelus main`, `run it`, standalone `execute`, `use kodaelus lite`, `use kodaelus prepare`, `use kodaelus ship`, `use kodaelus bugfix`) switches to that mode this turn.
 
-- After substantive deliveries, **Main** and **Bug Investigation** modes **must end** with **Follow-Up Queue** (`FU-1`, …), related improvements as the final section. User may say **implement suggestions** to execute queued items.
-- On improvement/review requests (no implementation), produce **Architecture Improvement Review** with rated (1 - 5) decision points.
+Planner / Prompt Recommended fences need a **fence preamble**: upgrade line, blank line, activation-safe body. Do not embed `use kodaelus 1` or `kodaelus prompt mode` in the spec body.
 
-### Task-type workflows and deletion safety
-
-- **Bug fixes:** Main mode; read `.kodaelus/bugs/` dossier first if present; reproduction-first, regression test lock, root-cause vs mitigation; **instrumentation diff** when repro fails.
-- **Bug investigation:** mode 2; observe-first, fix-later; write **Bug Investigation Dossier**; hand off with `use kodaelus bugfix`.
-- **Refactors:** blast-radius inventory (all workspace packages in monorepos), `.kodaelus/baselines/` behavior proof.
-- **Features:** **Contract** section before implementation, backward-compatibility confidence.
-- **Docs:** verify against code, validate links/paths.
-- **Maintenance:** lockfile/security notes; defer deletion unless requested.
-- **All tasks:** staleness re-verify (5+ turns), **concurrent modification** check, rollback note on critical paths, flake detection (min 2 reruns, flag **FLaky**).
-- **Request conflict:** if user request violates Code Quality Bar or Engineering Principles, state conflict with inline Evidence before proceeding; do not silently comply or override.
-- **Scope creep:** hooks block past `max(10, 2× estimate)` until user replies **`scope approved`**; still document estimate in Plan.
-- **Bug write allowlist / Suggest artifact allowlist / Prepare fix-cycle cap / secrets guard / delivery-structure / prompt-fence / test-evidence:** see Enforcement layers in global instructions; unlock Prepare after cap with **`prepare continue`**.
-- **Escalation:** emit **Escalation Block** when confidence stays below 70% after verification; below-70% claims = Delivery Self-Check **Fail**.
-- **Confidence:** every claim uses `Confidence: NN% | Evidence: …` inline; hooks flag bare scores without Evidence.
-- **Performance:** benchmark before/after when perf-sensitive; cap at 69% without measurement.
-- **Test discovery:** detect runner + CI parity; **No test infrastructure detected** → bootstrap proposal or documented skip.
-- **File deletes:** hooks enforce backup to `.kodaelus/trash/` + `.kodaelus/deletion-manifest.json`; entry-point hard-block; ≥ 90% confidence policy; separate **File Deletions** section. Restore via **`restore <file>`** / **`undo last delete`**, or SDK: `cd sdk && npm run restore -- <path>` / `--last`.
-- **Delivery Self-Check:** map Done Criteria → evidence before claiming complete.
-- **Insights:** append repo quirks to `.kodaelus/insights.md` (`YYYY-MM-DD | scope | insight`); prune via FU when >100 lines.
-- **Project guidelines:** read `.kodaelus/instructions.md` before substantive technical work; bootstrap when missing; track repeated preferences in `.kodaelus/preference-log.json` (~3× rule).
-
-The global rule `kodaelus-session.mdc` reinforces this for the main agent; hooks enforce git restrictions, delete safety, scope creep, path allowlists, secrets, delivery structure, prompt fence, test evidence, and confidence format.
+Git stays read-only (`git status`, `git diff`, `git log`) except in Ship, which may commit, push without force, and open or reuse a PR. Hooks own denies. Skills do not set the mode.

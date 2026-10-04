@@ -79,6 +79,43 @@ export function isSuggestArtifactPath(relativePath) {
 }
 
 /**
+ * Suggestions suffix from a raw edit path, including Windows extended paths.
+ * @param {string} editPath
+ * @returns {string | null}
+ */
+export function suggestionsPathTail(editPath) {
+  const normalized = `${editPath ?? ""}`.replace(/\\/g, "/");
+  const marker = SUGGESTIONS_DIR_REL;
+  const idx = normalized.toLowerCase().indexOf(marker);
+  if (idx < 0) return null;
+  const before = idx === 0 ? "" : normalized[idx - 1];
+  if (before && before !== "/" && before !== ":") return null;
+  const tail = normalized.slice(idx).replace(/["'\\].*$/, "");
+  if (!tail || tail.includes("..")) return null;
+  return tail;
+}
+
+/**
+ * Posix path.resolve keeps `C:\...` as a relative segment, so the resolved
+ * string can contain `.kodaelus/suggestions` without being rooted there.
+ * Salvage that Windows absolute form. A real relative path such as
+ * `evil/.kodaelus/suggestions` stays unchanged.
+ * @param {string} rel
+ * @param {string} raw
+ * @returns {string}
+ */
+export function resolveSuggestWritePath(rel, raw) {
+  const tail = suggestionsPathTail(raw);
+  if (!tail || !isSuggestArtifactPath(tail)) return rel;
+  const normalizedRel = `${rel ?? ""}`.replace(/\\/g, "/");
+  if (isSuggestArtifactPath(normalizedRel)) return rel;
+  if (/^[A-Za-z]:\//.test(normalizedRel)) return tail;
+  if (normalizedRel.includes(".kodaelus/suggestions")) return rel;
+  if (tail === normalizedRel || tail.endsWith(`/${normalizedRel}`)) return tail;
+  return rel;
+}
+
+/**
  * Paths where intentional fake secrets are allowed.
  * @param {string} relativePath
  * @returns {boolean}
@@ -127,29 +164,67 @@ export function isWriteStrReplaceOrPatchTool(toolName) {
   );
 }
 
+const NON_MKDIR_MUTATOR =
+  /\b(?:rm|rmdir|del|erase|remove-item|move-item|copy-item|set-content|out-file|git|npm)\b/i;
+
+/**
+ * Collect mkdir / New-Item Directory targets, including a PowerShell if-wrapper.
+ * @param {string} command
+ * @returns {string[]}
+ */
+function extractMkdirTargets(command) {
+  /** @type {string[]} */
+  const targets = [];
+  const mkdirRe = /\b(?:mkdir|md)\b([^;&|\n{}]*)/gi;
+  let match;
+  while ((match = mkdirRe.exec(command))) {
+    const args = match[1]
+      .replace(/["']/g, "")
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !part.startsWith("-"));
+    targets.push(...args);
+  }
+
+  const newItemRe = /\bNew-Item\b([^;&|\n{}]*)/gi;
+  while ((match = newItemRe.exec(command))) {
+    const chunk = match[1];
+    if (/\b-ItemType\s+(?!Directory\b)\S+/i.test(chunk)) continue;
+    if (!/\b-ItemType\s+Directory\b/i.test(chunk) && !/\bDirectory\b/i.test(chunk)) {
+      continue;
+    }
+    const pathMatch = chunk.match(/-Path\s+("[^"]+"|'[^']+'|\S+)/i);
+    if (pathMatch?.[1]) {
+      targets.push(pathMatch[1].replace(/["']/g, ""));
+      continue;
+    }
+    const args = chunk
+      .replace(/["']/g, "")
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !part.startsWith("-") && !/^Directory$/i.test(part));
+    targets.push(...args);
+  }
+  return targets;
+}
+
 /**
  * Allow Suggest-mode shell mkdir targeting .kodaelus/suggestions/** only.
+ * Gated forms such as `if (-not (Test-Path ...)) { mkdir ... }` are allowed
+ * when every mkdir target stays under that tree.
  * @param {string} command
  * @returns {boolean}
  */
 export function isAllowedSuggestShellCommand(command) {
   const normalized = `${command}`.trim();
   if (!normalized) return false;
+  if (NON_MKDIR_MUTATOR.test(normalized)) return false;
 
-  const mkdirMatch = normalized.match(
-    /^(?:mkdir(?:\s+(?:-p|--parents))*|md|New-Item(?:\s+-ItemType\s+Directory)?)\s+(.+)$/i,
-  );
-  if (!mkdirMatch?.[1]) return false;
-
-  const args = mkdirMatch[1]
-    .replace(/["']/g, "")
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .filter((part) => !part.startsWith("-"));
-
-  if (args.length === 0) return false;
-  return args.every((arg) => isSuggestArtifactPath(normalizeRelPath(arg)));
+  const targets = extractMkdirTargets(normalized);
+  if (targets.length === 0) return false;
+  return targets.every((arg) => isSuggestArtifactPath(normalizeRelPath(arg)));
 }
 
 export { SUGGESTIONS_DIR_REL };

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   ASK_QUESTION_HOOK_FAIL_CLOSED_READY,
@@ -25,6 +27,7 @@ test("shouldDenyAskQuestion only for mutating modes", () => {
   assert.equal(shouldDenyAskQuestion("lite"), true);
   assert.equal(shouldDenyAskQuestion("bug"), true);
   assert.equal(shouldDenyAskQuestion("prepare"), true);
+  assert.equal(shouldDenyAskQuestion("ship"), true);
   assert.equal(shouldDenyAskQuestion("prompt"), false);
   assert.equal(shouldDenyAskQuestion("suggest"), false);
   assert.equal(shouldDenyAskQuestion("question"), false);
@@ -115,6 +118,13 @@ test("detectOpenClarification prefers precision over recall", () => {
     ),
     false,
   );
+  assert.equal(detectOpenClarification("Awaiting your choice before I edit the file."), true);
+  assert.equal(detectOpenClarification("Which of these should land first?"), true);
+  assert.equal(detectOpenClarification("I need you to choose the branch name."), true);
+  assert.equal(
+    detectOpenClarification("The docs mention choosing a branch without asking the user."),
+    false,
+  );
   assert.equal(detectOpenClarification(""), false);
   assert.equal(detectOpenClarification(null), false);
 });
@@ -129,4 +139,16 @@ test("buildStopFollowupMessage reminds resolution priority", () => {
   const retry = buildStopFollowupMessage({ loopCount: 1 });
   assert.match(retry, /still appears/i);
   assert.match(retry, /rule 5/i);
+});
+
+test("ask-question preToolUse stays fail-open while the flag is false", () => {
+  assert.equal(ASK_QUESTION_HOOK_FAIL_CLOSED_READY, false);
+  const hooksPath = fileURLToPath(new URL("../../templates/hooks.json", import.meta.url));
+  const hooks = JSON.parse(readFileSync(hooksPath, "utf8"));
+  const pre = hooks.hooks.preToolUse.find((entry) =>
+    `${entry.command ?? ""}`.includes("ask-question-guard"),
+  );
+  assert.ok(pre);
+  assert.equal(pre.failClosed, undefined);
+  assert.equal(shouldDenyAskQuestion("ship"), true);
 });
