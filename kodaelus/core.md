@@ -79,13 +79,33 @@ Eight modes persist per chat until opt-out or an explicit mode switch.
 
 ## Read protocol
 
-On every substantive turn, read only:
+Read this pack once, on the first substantive turn of a run. That read satisfies the mandatory read for the rest of the run:
 
 1. `core.md` (this file).
 2. Exactly one of `modes/<active>.md`.
 3. Task files and self-check fragments named for this mode in `policy-manifest.json` (always-read pack, tier pack, conditional keyword rules). Do not rediscover the pack by reading every task file. When the manifest lists a self-check fragment, Read `fragments/delivery-self-check.md` and use the named section. An include marker is a mandatory Read, not invisible HTML. IDE: Read fragments/delivery-self-check.md
 4. Project `.kodaelus/instructions.md` when present (includes `## Preferences`).
 5. `.kodaelus/insights.md` when present, on Main, Prepare, and Ship turns. If it exceeds 100 lines, queue a prune instead of appending. A stop hook nudges once when the file exists and the reply never mentions it.
+
+### Read ledger
+
+The first read of a file may be the whole file. After that, read only the lines about to change, plus about 20 lines of surrounding context. Do not re-read a file that has not changed since the last read in this run. Continue from that read and from the diff of your own edits. Re-read the needed range when the file changed outside your edits (the concurrent-modification safeguard) or when you need a line range you have not read.
+
+Before editing a file over about 600 lines, if the planned change spans more than one cohesive responsibility and existing tests cover the behavior, split it first into cohesive units as a refactor with no behavior change. Follow `tasks/refactor.md`: blast radius, then pre/post baselines under `.kodaelus/baselines/`. A single-site fix inside one responsibility stays in place. Example only: a node class might become elections, replication, reads, snapshots, and membership.
+
+The ledger is working memory for the run. Do not add a new ledger file. `.kodaelus/HANDOFF.md` is the only cross-agent record. Only Ship mode writes it.
+
+### Search protocol
+
+Locate first with a file list or a count (`rg -l` or the search tool's files-and-counts mode). Then read matches with a cap: about 5 matches, or about 40 lines of context. Search a symbol or path you already know. A broad word is not the first search. Do not repeat an identical search in the same run. Identical means the same pattern, path, and glob after whitespace is normalized. A narrower pattern is a different search.
+
+### Edit protocol
+
+Use small anchored replacements. Do not rewrite an existing file, or a large block, to apply a local change. New files may be written whole. Do not echo the edited file back into the chat. Re-verify with tests or a build, not with another read. Apply related edits in one file as sequential anchored replacements in the same turn, without a re-read between them. One replacement call per hunk is the batch. Do not use a whole-file write to simulate a batch.
+
+### Plan-once
+
+Write one short plan per work item at the start, then act. Do not re-plan unless a test result contradicts that plan. After two failed attempts at the same item, stop guessing. Write an Escalation Block: one paragraph hypothesis plus one instrumentation step. Example only: a socket loop that keeps being re-reasoned from the same code.
 
 ### Routing
 

@@ -1,0 +1,6 @@
+{"role":"assistant","content":"## Plan\nAdd token-budget rules.\nConfidence: 82% | Evidence: kodaelus/core.md:82"}
+{"tool":"Read","path":"kodaelus/core.md","content":"read protocol once"}
+{"tool":"Grep","pattern":"Read protocol","path":"kodaelus","content":"core.md:80 Read protocol"}
+{"tool":"Shell","command":"npm test","exitCode":1,"content":"not ok 1 policy budget"}
+{"tool":"StrReplace","path":"kodaelus/core.md","content":"anchored hunk"}
+{"tool":"Read","path":"kodaelus/core.md","content":"read protocol once"}

@@ -19,6 +19,10 @@
 
 **Workflow:** change inventory; full suite (`npm test`, plus `cd sdk && npm test` when SDK surface changed); fix-and-rerun up to 3; on green, commit with the proposed message; push the current branch and set upstream if needed; `gh pr create` when no PR exists, otherwise reuse `gh pr view`; poll checks. On fail, repair within 3 product cycles, then re-poll. On pending, poll with the backoff above. Report pass, fail, or pending with evidence and put the PR URL in the delivery. Ship is not an open-ended babysitter.
 
+## Phase boundary
+
+At the end of each phase or follow-up item, write `.kodaelus/HANDOFF.md` with: current state, decisions, open items, and relevant files with line ranges. The next phase is a fresh agent whose first read is that file, then only the listed ranges. That agent has an empty ledger, so it reads policy once under the read protocol in `core.md`. This does not shrink unique content. It shrinks context re-sent to the next agent. Do not commit the handoff unless the user asks. Modes other than Ship do not write this file.
+
 ## Ship response structure
 
 1. **Understanding.** Pending change versus `HEAD`.
