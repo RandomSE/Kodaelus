@@ -6,19 +6,59 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CATEGORIES = ["reads", "re-reads", "search", "edits", "reasoning", "tool-output"];
-const TEST_COMMAND_PATTERNS = [
-  /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/,
-  /(?:^|\s)dotnet (?:test|build)(?:\s|$)/,
-];
+const DEFAULT_TEST_COMMANDS = [/(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/];
+const DEFAULT_FAILURE_PATTERNS = [/\bnot ok\b/, /\b[1-9]\d* (?:failed|failing)\b/i];
 const RG_COMMAND = /(?:^|\s|[;&|])rg(?:\s|$)/;
+const REPO_CONFIG = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "evals", "config.json");
+
+/**
+ * Eval config: built-in generic defaults, plus `testCommands` and `failurePatterns`
+ * (regex source strings) from the repo `evals/config.json` and the nearest
+ * `config.json` at or above the transcript's directory.
+ * @param {string} file
+ */
+function loadConfig(file) {
+  const testCommands = [...DEFAULT_TEST_COMMANDS];
+  const failurePatterns = [...DEFAULT_FAILURE_PATTERNS];
+  const sources = [REPO_CONFIG];
+  let dir = dirname(resolve(file));
+  for (;;) {
+    const candidate = join(dir, "config.json");
+    if (existsSync(candidate)) {
+      sources.push(candidate);
+      break;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  for (const source of new Set(sources.map((item) => resolve(item)))) {
+    if (!existsSync(source)) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(readFileSync(source, "utf8"));
+    } catch {
+      continue;
+    }
+    for (const text of Array.isArray(parsed.testCommands) ? parsed.testCommands : []) {
+      testCommands.push(new RegExp(text));
+    }
+    for (const text of Array.isArray(parsed.failurePatterns) ? parsed.failurePatterns : []) {
+      failurePatterns.push(new RegExp(text, "m"));
+    }
+  }
+  return { testCommands, failurePatterns };
+}
 
 /**
  * @param {string} command
+ * @param {{ testCommands: RegExp[] }} config
  */
-function isTestCommand(command) {
-  return TEST_COMMAND_PATTERNS.some((pattern) => pattern.test(command || ""));
+function isTestCommand(command, config) {
+  return config.testCommands.some((pattern) => pattern.test(command || ""));
 }
 
 /**
@@ -76,6 +116,54 @@ export function evaluatePath(target, options = {}) {
   };
 }
 
+const SHARE_TOLERANCE = 0.02;
+
+/**
+ * Compare each `<name>.jsonl` in a local folder with `<name>.expected.json`:
+ * re-reads per file exactly, category shares within two points, and any listed behavior checks.
+ * A missing folder is a clean skip (CI has no private fixtures).
+ * @param {string} dir
+ */
+export function expectLocal(dir) {
+  const abs = resolve(dir);
+  if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+    return { exitCode: 0, report: `expect: skipped (no ${dir})\n` };
+  }
+  const lines = [];
+  let failed = false;
+  const files = readdirSync(abs).filter((name) => name.endsWith(".jsonl")).sort();
+  for (const name of files) {
+    const expectedFile = join(abs, name.replace(/\.jsonl$/, ".expected.json"));
+    if (!existsSync(expectedFile)) {
+      lines.push(`${name}: skipped (no ${basename(expectedFile)})`);
+      continue;
+    }
+    const expected = JSON.parse(readFileSync(expectedFile, "utf8"));
+    const run = evaluateFile(join(abs, name));
+    const problems = [];
+    const wantRereads = expected.rereads_per_file || {};
+    const gotRereads = run.rereadCounts || {};
+    for (const file of new Set([...Object.keys(wantRereads), ...Object.keys(gotRereads)])) {
+      if ((wantRereads[file] || 0) !== (gotRereads[file] || 0)) {
+        problems.push(`re-reads ${file}: expected ${wantRereads[file] || 0}, got ${gotRereads[file] || 0}`);
+      }
+    }
+    for (const [key, want] of Object.entries(expected.shares || {})) {
+      const got = run.shares[key] ?? 0;
+      if (Math.abs(got - want) > SHARE_TOLERANCE) {
+        problems.push(`${key} share: expected ${want.toFixed(4)}, got ${got.toFixed(4)}`);
+      }
+    }
+    for (const [key, want] of Object.entries(expected.behaviour_checks_expected || {})) {
+      if (run.checks[key] !== want) problems.push(`${key}: expected ${want}, got ${run.checks[key]}`);
+    }
+    if (problems.length > 0) failed = true;
+    lines.push(`${name}: ${problems.length === 0 ? "ok" : `FAIL\n  ${problems.join("\n  ")}`}`);
+  }
+  if (files.length === 0) lines.push("expect: skipped (no transcripts)");
+  return { exitCode: failed ? 1 : 0, report: `${lines.join("\n")}\n` };
+}
+
 /**
  * @param {string} abs
  * @param {boolean} skipChildFixtures
@@ -90,6 +178,8 @@ function collectJsonl(abs, skipChildFixtures) {
     const full = join(abs, entry.name);
     if (entry.isDirectory()) {
       if (skipChildFixtures && entry.name === "fixtures") continue;
+      // Private real-transcript fixtures are checked only by expectLocal.
+      if (entry.name === "local") continue;
       found.push(...collectJsonl(full, skipChildFixtures));
       continue;
     }
@@ -113,7 +203,7 @@ function evaluateFile(file) {
         planBeforeEdit: "unevaluable",
         confidenceEvidence: "unevaluable",
       }
-    : behaviorChecks(parsed.events);
+    : behaviorChecks(parsed.events, loadConfig(file));
   const categoryGate = categoryGateFor(file, tallied.shares);
   const exitCode =
     unevaluable ||
@@ -160,7 +250,30 @@ function parseJsonl(text) {
       malformed += 1;
     }
   }
-  return { events, malformed };
+  return { events: attachResults(events), malformed };
+}
+
+/**
+ * Credit a separate tool-result event to the most recent tool call that has no result yet,
+ * so its tokens count as that call's read, search, edit, or command output.
+ * @param {object[]} events
+ */
+function attachResults(events) {
+  let pending = null;
+  for (const event of events) {
+    if (event.tool) {
+      pending = event.hasResult ? null : event;
+      continue;
+    }
+    if (event.kind !== "tool-output" || !pending) continue;
+    pending.content = event.content || pending.content;
+    if (pending.exitCode === undefined) pending.exitCode = event.exitCode;
+    if (!pending.path) pending.path = event.path || "";
+    pending.hasResult = true;
+    event.kind = "skip";
+    pending = null;
+  }
+  return events;
 }
 
 /**
@@ -174,6 +287,9 @@ function eventsFrom(obj, rawLine) {
 
   if (typeof obj.thinking === "string" && obj.thinking.length > 0) {
     events.push({ kind: "reasoning", content: obj.thinking, usage: null, raw: rawLine });
+    if (typeof obj.text === "string" && obj.text.length > 0) {
+      events.push({ kind: "reasoning", content: obj.text, usage: null, raw: rawLine });
+    }
   }
 
   const blocks = Array.isArray(obj.content)
@@ -215,22 +331,27 @@ function eventsFrom(obj, rawLine) {
     );
     const pattern = firstString(obj.pattern, input.pattern, input.glob_pattern);
     const explicit = blocks ? "" : stringContent(obj.content ?? obj.text ?? obj.output ?? obj.result ?? "");
+    const hasResult = obj.tool_result !== undefined && obj.tool_result !== null;
+    // A flat row carries the call and its result: credit the result to this tool.
+    const resultText = hasResult ? resultTextFor(tool, obj.tool_result) : "";
     events.push({
       tool,
-      path,
+      path: path || (hasResult ? diffPath(obj.tool_result) : ""),
       command,
       pattern,
-      content: explicit || payloadFrom(tool, { ...input, command, path, pattern }),
-      exitCode: numericExit(obj),
+      content: resultText || explicit || payloadFrom(tool, { ...input, command, path, pattern }),
+      exitCode: hasResult ? numericExit(obj.tool_result) ?? numericExit(obj) : numericExit(obj),
+      hasResult,
       usage: null,
       raw: rawLine,
     });
   }
 
-  if (obj.tool_result !== undefined && obj.tool_result !== null) {
+  if (obj.tool_result !== undefined && obj.tool_result !== null && !(!alreadyHasTool && tool)) {
     events.push({
       kind: "tool-output",
-      content: toolResultText(obj.tool_result),
+      content: resultTextFor("", obj.tool_result),
+      path: diffPath(obj.tool_result),
       exitCode: numericExit(obj.tool_result) ?? numericExit(obj),
       command: "",
       usage: null,
@@ -440,7 +561,7 @@ function classify(event, readPaths) {
 /**
  * @param {object[]} events
  */
-function behaviorChecks(events) {
+function behaviorChecks(events, config = loadConfig(REPO_CONFIG)) {
   let seenRead = false;
   let sawCore = false;
   let seenTest = false;
@@ -465,9 +586,9 @@ function behaviorChecks(events) {
       if (isCorePath(event.path || "")) sawCore = true;
     }
 
-    if (isTestCommand(event.command || "")) {
+    if (isTestCommand(event.command || "", config)) {
       seenTest = true;
-      if (isFailure(event) && !seenProduct) {
+      if (isFailure(event, config) && !seenProduct) {
         seenFailedTest = true;
         failedBeforeProduct = true;
       }
@@ -729,9 +850,12 @@ function isTestPath(path) {
 /**
  * @param {object} event
  */
-function isFailure(event) {
-  if (typeof event.exitCode === "number") return event.exitCode !== 0;
-  return /\b(fail|failed|not ok)\b/i.test(event.content || "");
+function isFailure(event, config) {
+  const text = event.content || "";
+  if (typeof event.exitCode === "number" && event.exitCode !== 0) return true;
+  if (config && config.failurePatterns.some((pattern) => pattern.test(text))) return true;
+  if (typeof event.exitCode === "number") return false;
+  return /\b(fail|failed|not ok)\b/i.test(text);
 }
 
 /**
@@ -764,8 +888,57 @@ function scanConfidence(text) {
  * @param {object} obj
  */
 function numericExit(obj) {
-  const value = obj.exitCode ?? obj.exit_code;
+  if (!obj || typeof obj !== "object") return undefined;
+  const nested = objectField(obj.value);
+  const value = obj.exitCode ?? obj.exit_code ?? nested?.exitCode ?? nested?.exit_code;
   return typeof value === "number" ? value : undefined;
+}
+
+/**
+ * Text a tool result contributes: file contents, diff hunks, command output,
+ * or, for searches with structured matches, the serialized result value.
+ * @param {string} tool
+ * @param {unknown} result
+ */
+function resultTextFor(tool, result) {
+  const diff = diffText(result);
+  if (diff) return diff;
+  const text = toolResultText(result);
+  if (text) return text;
+  const obj = objectField(result);
+  if (!obj) return "";
+  const value = obj.value === undefined ? obj : obj.value;
+  return value && typeof value === "object" ? JSON.stringify(value) : "";
+}
+
+/**
+ * @param {unknown} result
+ */
+function diffChunks(result) {
+  const value = objectField(objectField(result)?.value) || objectField(result);
+  const chunks = value?.diff?.chunks;
+  return Array.isArray(chunks) ? chunks.filter((chunk) => typeof chunk?.diffString === "string") : [];
+}
+
+/**
+ * @param {unknown} result
+ */
+function diffText(result) {
+  return diffChunks(result)
+    .map((chunk) => chunk.diffString)
+    .join("\n");
+}
+
+/**
+ * Edited path from a unified diff header (`+++ b/<path>`), when the call has no path argument.
+ * @param {unknown} result
+ */
+function diffPath(result) {
+  for (const chunk of diffChunks(result)) {
+    const match = /^\+\+\+ (?:b\/)?(\S+)/m.exec(chunk.diffString);
+    if (match && match[1] !== "/dev/null") return match[1];
+  }
+  return "";
 }
 
 /**
@@ -815,7 +988,7 @@ function toolResultText(value) {
  * @param {object} obj
  */
 function textFromFields(obj) {
-  for (const key of ["content", "output", "text"]) {
+  for (const key of ["content", "contents", "output", "text"]) {
     const found = scalarOrOneLevel(obj[key]);
     if (found) return found;
   }
