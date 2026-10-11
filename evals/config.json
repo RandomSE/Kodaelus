@@ -1,0 +1,5 @@
+{
+  "why": "Project-specific test/build commands and failure summaries. Generic defaults live in install/lib/kodaelus-eval.mjs.",
+  "testCommands": ["(?:^|\\s)dotnet (?:test|build)(?:\\s|$)"],
+  "failurePatterns": ["^Failed!", "\\bFailed:\\s*[1-9]"]
+}

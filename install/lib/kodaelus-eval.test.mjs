@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { evaluatePath } from "./kodaelus-eval.mjs";
+import { evaluatePath, expectLocal } from "./kodaelus-eval.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixturesDir = join(repoRoot, "evals", "fixtures");
@@ -289,24 +289,21 @@ test("anonymised transcript matches hand counts and stays within the baseline", 
   assert.equal(result.runCount, 1);
   assert.equal(result.exitCode, 0);
   const run = result.runs[0];
+  // Each tool result is credited to its own call: the 40-char Read result is a read,
+  // the 20-char Grep result is a search, and only the shell output is tool-output.
   assert.deepEqual(run.tokens, {
-    reads: 4,
+    reads: 10,
     "re-reads": 4,
-    search: 2,
+    search: 5,
     edits: 2,
     reasoning: 19,
-    "tool-output": 19,
+    "tool-output": 2,
   });
   assert.equal(run.rereadCount, 1);
   assert.deepEqual(run.rereadCounts, { "policy/core.md": 1 });
-  assert.equal(run.largestOutputs[0].tokens, 10);
-  assert.equal(run.largestOutputs[0].label.length, 40);
-  assert.equal(run.largestOutputs[1].tokens, 5);
-  assert.equal(run.largestOutputs[1].label.length, 20);
-  assert.equal(run.largestOutputs[2].label, "not ok");
-  assert.equal(run.largestOutputs[2].tokens, 2);
-  assert.equal(run.largestOutputs[3].label, "npm test");
-  assert.equal(run.largestOutputs[3].tokens, 2);
+  assert.equal(run.largestOutputs.length, 1);
+  assert.equal(run.largestOutputs[0].label, "not ok");
+  assert.equal(run.largestOutputs[0].tokens, 2);
   assert.equal(run.checks.testBeforeEdit, "pass");
   assert.equal(run.checks.coreRead, "pass");
   assert.equal(run.checks.planBeforeEdit, "pass");
@@ -321,4 +318,141 @@ test("the evals tree is not a behaviour-check or category regression", () => {
   const result = evaluatePath(join(repoRoot, "evals"));
   assert.equal(result.exitCode, 0);
   assert.ok(result.runCount >= 11);
+});
+
+test("cursor-tools fixture counts re-reads, nested tool output, and dotnet test", () => {
+  const result = evaluatePath(join(fixturesDir, "cursor-tools.jsonl"));
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.runCount, 1);
+  const run = result.runs[0];
+  assert.equal(run.rereadCount, 1);
+  assert.deepEqual(run.rereadCounts, { "kodaelus/core.md": 1 });
+  assert.ok(run.tokens.reads > 0);
+  assert.ok(run.tokens.search > 0);
+  assert.ok(run.tokens.edits > 0);
+  assert.ok(run.tokens["tool-output"] > 0);
+  assert.ok(run.shares.reasoning < 1);
+  assert.equal(run.checks.coreRead, "pass");
+  assert.equal(run.checks.testBeforeEdit, "pass");
+  assert.equal(run.checks.planBeforeEdit, "pass");
+  assert.equal(run.checks.confidenceEvidence, "pass");
+  assert.equal(run.categoryGate.status, "skip");
+  assert.ok(run.largestOutputs.some((item) => item.label === "dotnet test"));
+  assert.match(run.largestSearches[0].label, /glob_file_search/);
+});
+
+test("failing dotnet build before a product edit passes test-before-edit", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nBuild.\nConfidence: 80% | Evidence: src/App.cs:1",
+    }),
+    JSON.stringify({ tool: "read_file", tool_args: { target_file: "kodaelus/core.md" } }),
+    JSON.stringify({
+      tool: "run_terminal_cmd",
+      tool_args: { command: "dotnet build" },
+      exitCode: 1,
+    }),
+    JSON.stringify({ tool: "search_replace", tool_args: { path: "src/App.cs", new_string: "b" } }),
+  ].join("\n");
+  const { file } = tempJsonl("dotnet-build.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "pass");
+  assert.equal(result.runs[0].checks.coreRead, "pass");
+});
+
+test("dotnet run before a product edit does not satisfy test-before-edit", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nRun.\nConfidence: 80% | Evidence: src/App.cs:1",
+    }),
+    JSON.stringify({ tool: "Read", path: "kodaelus/core.md", content: "abcd" }),
+    JSON.stringify({ tool: "run_terminal_cmd", tool_args: { command: "dotnet run" }, exitCode: 1 }),
+    JSON.stringify({ tool: "StrReplace", path: "src/App.cs", content: "b" }),
+  ].join("\n");
+  const { file } = tempJsonl("dotnet-run.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "fail");
+  assert.equal(result.runs[0].checks.coreRead, "pass");
+});
+
+test("a string output field on a tool result contributes tokens", () => {
+  const { file } = tempJsonl(
+    "output-field.jsonl",
+    JSON.stringify({ role: "tool", output: "x".repeat(40) }),
+  );
+  const result = evaluatePath(file);
+  assert.ok(result.runs[0].tokens["tool-output"] > 0);
+});
+
+test("flat cursor rows credit each tool_result to its own tool category", () => {
+  const big = (n) => "x".repeat(n);
+  const lines = [
+    { role: "assistant", thinking: big(400), text: big(40) },
+    { role: "assistant", tool_calls: [{ tool_call_id: "a", tool_name: "read_file", tool_args: { target_file: "/w/src/A.js" } }] },
+    { role: "tool", tool_name: "read_file", tool_args: { target_file: "/w/src/A.js" }, tool_result: { resultType: "readFileResult", value: { contents: big(200) } } },
+    { role: "tool", tool_name: "read_file", tool_args: { target_file: "/w/src/A.js" }, tool_result: { resultType: "readFileResult", value: { contents: big(100) } } },
+    { role: "tool", tool_name: "grep", tool_result: { resultType: "grepResult", value: { internal: { results: [{ resource: "src/A.js", results: [{ match: { previewText: big(120) } }] }] } } } },
+    { role: "tool", tool_name: "run_terminal_cmd", tool_args: { command: "npm test" }, tool_result: { resultType: "runTerminalCommandV2Result", value: { output: `not ok 1\n${big(140)}`, exitCode: 1 } } },
+    { role: "tool", tool_name: "search_replace", tool_result: { resultType: "editFileResult", value: { diff: { chunks: [{ diffString: `--- a/w/src/A.js\n+++ b/w/src/A.js\n${big(160)}` }] } } } },
+  ].map((row) => JSON.stringify(row)).join("\n");
+  const { file } = tempJsonl("cursor-flat.jsonl", lines);
+  const run = evaluatePath(file).runs[0];
+  assert.equal(run.rereadCount, 1);
+  assert.deepEqual(run.rereadCounts, { "/w/src/A.js": 1 });
+  assert.ok(run.tokens.reads >= 50, `reads ${run.tokens.reads}`);
+  assert.ok(run.tokens["re-reads"] >= 25, `re-reads ${run.tokens["re-reads"]}`);
+  assert.ok(run.tokens.search >= 30, `search ${run.tokens.search}`);
+  assert.ok(run.tokens.edits >= 40, `edits ${run.tokens.edits}`);
+  assert.ok(run.tokens.reasoning >= 110, `reasoning ${run.tokens.reasoning}`);
+  assert.ok(run.tokens["tool-output"] >= 35, `tool-output ${run.tokens["tool-output"]}`);
+  assert.equal(run.checks.testBeforeEdit, "pass");
+});
+
+test("tool_result.value.exitCode zero with a configured failure summary is a failure", () => {
+  const lines = [
+    { role: "tool", tool_name: "run_terminal_cmd", tool_args: { command: "make check" }, tool_result: { value: { output: "SUMMARY: 2 failed", exitCode: 0 } } },
+    { role: "tool", tool_name: "search_replace", tool_result: { value: { diff: { chunks: [{ diffString: "--- a/lib/x.js\n+++ b/lib/x.js\n+y" }] } } } },
+  ].map((row) => JSON.stringify(row)).join("\n");
+  const { dir, file } = tempJsonl("cfg.jsonl", lines);
+  writeFileSync(join(dir, "config.json"), JSON.stringify({ testCommands: ["(?:^|\\s)make check(?:\\s|$)"], failurePatterns: ["\\b[1-9]\\d* failed\\b"] }));
+  const run = evaluatePath(file).runs[0];
+  assert.equal(run.checks.testBeforeEdit, "pass");
+});
+
+test("expectLocal compares re-reads exactly and shares within two points, and skips a missing folder", () => {
+  const missing = expectLocal(join(tmpdir(), "kodaelus-no-such-local-dir"));
+  assert.equal(missing.exitCode, 0);
+  assert.match(missing.report, /skipped/);
+
+  const rows = [
+    { role: "assistant", thinking: "x".repeat(400) },
+    { role: "tool", tool_name: "read_file", tool_args: { target_file: "src/A.js" }, tool_result: { value: { contents: "x".repeat(200) } } },
+    { role: "tool", tool_name: "read_file", tool_args: { target_file: "src/A.js" }, tool_result: { value: { contents: "x".repeat(200) } } },
+  ].map((row) => JSON.stringify(row)).join("\n");
+  const { dir } = tempJsonl("run.jsonl", rows);
+  const expected = {
+    rereads_per_file: { "src/A.js": 1 },
+    shares: { reads: 0.25, "re-reads": 0.25, reasoning: 0.5, search: 0, edits: 0, "tool-output": 0 },
+    behaviour_checks_expected: { coreRead: "fail" },
+  };
+  writeFileSync(join(dir, "run.expected.json"), JSON.stringify(expected));
+  const ok = expectLocal(dir);
+  assert.equal(ok.exitCode, 0, ok.report);
+
+  expected.shares.reasoning = 0.45;
+  expected.rereads_per_file = { "src/A.js": 2 };
+  writeFileSync(join(dir, "run.expected.json"), JSON.stringify(expected));
+  const bad = expectLocal(dir);
+  assert.equal(bad.exitCode, 1);
+  assert.match(bad.report, /reasoning/);
+  assert.match(bad.report, /re-reads/);
+});
+
+test("a parent scan skips a local folder of private fixtures", () => {
+  const { dir } = tempJsonl("top.jsonl", JSON.stringify({ role: "assistant", content: "hi" }));
+  mkdirSync(join(dir, "local"));
+  writeFileSync(join(dir, "local", "private.jsonl"), `${JSON.stringify({ role: "assistant", content: "x" })}\n`);
+  assert.equal(evaluatePath(dir).runCount, 1);
 });
