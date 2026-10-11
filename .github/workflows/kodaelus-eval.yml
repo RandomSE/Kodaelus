@@ -7,6 +7,14 @@ on:
       - "scripts/kodaelus-eval.mjs"
       - "install/lib/kodaelus-eval.mjs"
       - "install/lib/kodaelus-eval.test.mjs"
+  push:
+    branches:
+      - main
+    paths:
+      - "evals/**"
+      - "scripts/kodaelus-eval.mjs"
+      - "install/lib/kodaelus-eval.mjs"
+      - "install/lib/kodaelus-eval.test.mjs"
 
 jobs:
   eval:
@@ -28,3 +36,5 @@ jobs:
             echo "bad fixture must exit non-zero"
             exit 1
           fi
+      - name: Cursor shape fixture passes
+        run: node scripts/kodaelus-eval.mjs evals/fixtures/cursor-shape.jsonl

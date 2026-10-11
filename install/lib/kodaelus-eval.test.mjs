@@ -64,7 +64,7 @@ test("bad synthetic transcript fails every behavior check", () => {
 test("fixtures directory exits non-zero while the good transcript still passes", () => {
   const result = evaluatePath(fixturesDir);
   assert.equal(result.exitCode, 1);
-  assert.equal(result.runCount, 2);
+  assert.equal(result.runCount, 3);
   const good = result.runs.find((run) => run.file.endsWith("good.jsonl"));
   const bad = result.runs.find((run) => run.file.endsWith("bad.jsonl"));
   assert.ok(good);
@@ -259,4 +259,52 @@ test("write-baseline records measured shares and refuses an empty drop", () => {
   assert.equal(empty.exitCode, 1);
   assert.equal(existsSync(join(emptyDir, "baseline.json")), false);
   assert.match(empty.report, /not writing baseline\.json/);
+});
+
+test("cursor shape fixture measures re-reads, shares, and behavior checks", () => {
+  const result = evaluatePath(join(fixturesDir, "cursor-shape.jsonl"));
+  assert.equal(result.exitCode, 0);
+  const run = result.runs[0];
+  assert.equal(run.rereadCount, 1);
+  assert.ok(run.shares.search > 0);
+  assert.ok(run.shares.edit > 0);
+  assert.ok(run.shares.reasoning < 1);
+  assert.equal(run.checks.testBeforeEdit, "pass");
+  assert.equal(run.checks.coreRead, "pass");
+  assert.equal(run.checks.planBeforeEdit, "pass");
+  assert.equal(run.checks.confidenceEvidence, "pass");
+});
+
+test("cursor shape search_replace before dotnet test fails test-before-edit", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "search_replace",
+            input: { file_path: "policy/notes.md", old_string: "alpha", new_string: "beta" },
+          },
+        ],
+      },
+    }),
+    JSON.stringify({
+      role: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "run_terminal_cmd",
+            input: { command: "dotnet test" },
+            output: "failed",
+          },
+        ],
+      },
+      exitCode: 1,
+    }),
+  ].join("\n");
+  const { file } = tempJsonl("dotnet-after-edit.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "fail");
 });

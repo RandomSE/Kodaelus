@@ -8,8 +8,19 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import { basename, dirname, join, resolve } from "node:path";
 
 const CATEGORIES = ["reread", "search", "edit", "reasoning", "other"];
-const TEST_COMMAND = /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/;
+const TEST_COMMAND = [
+  /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/,
+  /(?:^|\s)dotnet test(?:\s|$)/,
+  /(?:^|\s)dotnet build(?:\s|$)/,
+];
 const RG_COMMAND = /(?:^|\s|[;&|])rg(?:\s|$)/;
+
+/**
+ * @param {string} command
+ */
+function matchesTestCommand(command) {
+  return TEST_COMMAND.some((pattern) => pattern.test(command || ""));
+}
 
 /**
  * @param {string} target file or directory
@@ -157,15 +168,42 @@ function parseJsonl(text) {
  */
 function eventsFrom(obj, rawLine) {
   const usage = extractUsage(obj);
-  if (Array.isArray(obj.content)) {
-    const fromBlocks = eventsFromBlocks(obj, rawLine, usage);
+  const blocks = Array.isArray(obj.content)
+    ? obj.content
+    : obj.message && typeof obj.message === "object" && Array.isArray(obj.message.content)
+      ? obj.message.content
+      : null;
+  if (blocks) {
+    const source = blocks === obj.content ? obj : { ...obj, content: blocks };
+    const fromBlocks = eventsFromBlocks(source, rawLine, usage);
     if (fromBlocks.length > 0) return fromBlocks;
   }
 
   const content = stringContent(obj.content ?? obj.text ?? obj.output ?? obj.result ?? "");
-  const path = firstString(obj.path, obj.file_path, obj.filePath, obj.input?.path, obj.arguments?.path);
+  const path = firstString(
+    obj.path,
+    obj.file_path,
+    obj.filePath,
+    obj.target_file,
+    obj.target_directory,
+    obj.input?.path,
+    obj.input?.file_path,
+    obj.input?.target_file,
+    obj.input?.target_directory,
+    obj.arguments?.path,
+    obj.arguments?.file_path,
+    obj.arguments?.target_file,
+    obj.arguments?.target_directory,
+  );
   const command = firstString(obj.command, obj.input?.command, obj.arguments?.command);
-  const pattern = firstString(obj.pattern, obj.input?.pattern, obj.arguments?.pattern);
+  const pattern = firstString(
+    obj.pattern,
+    obj.glob_pattern,
+    obj.input?.pattern,
+    obj.input?.glob_pattern,
+    obj.arguments?.pattern,
+    obj.arguments?.glob_pattern,
+  );
   const exitCode = numericExit(obj);
   const tool = firstString(obj.tool, obj.toolName, obj.tool_name);
 
@@ -200,17 +238,32 @@ function eventsFromBlocks(obj, rawLine, usage) {
       const input = block.input && typeof block.input === "object" ? block.input : {};
       events.push({
         tool: firstString(block.name, block.tool),
-        path: firstString(input.path, input.file_path, input.target_file),
+        path: firstString(input.path, input.file_path, input.target_file, input.target_directory),
         command: firstString(input.command),
-        pattern: firstString(input.pattern),
-        content: "",
-        exitCode: undefined,
+        pattern: firstString(input.pattern, input.glob_pattern),
+        content: stringContent(block),
+        exitCode: numericExit(block) ?? numericExit(obj),
         usage: null,
         raw: rawLine,
       });
       continue;
     }
-    if (typeof block.text === "string") texts.push(block.text);
+    if (typeof block.text === "string") {
+      texts.push(block.text);
+      continue;
+    }
+    const extracted = stringContent(block);
+    if (!extracted) continue;
+    if (block.type === "tool_result" || typeof block.output === "string") {
+      events.push({
+        kind: "other",
+        content: extracted,
+        usage: null,
+        raw: rawLine,
+      });
+      continue;
+    }
+    texts.push(extracted);
   }
   if (texts.length > 0 && (obj.role === "assistant" || events.length === 0)) {
     events.unshift({
@@ -347,7 +400,7 @@ function behaviorChecks(events) {
       if (isCorePath(event.path || "")) sawCore = true;
     }
 
-    if (TEST_COMMAND.test(event.command || "")) {
+    if (matchesTestCommand(event.command || "")) {
       seenTest = true;
       if (isFailure(event) && !seenProduct) {
         seenFailedTest = true;
@@ -502,7 +555,8 @@ function normTool(name) {
  * @param {string} name
  */
 function isReadTool(name) {
-  return normTool(name) === "read";
+  const tool = normTool(name);
+  return tool === "read" || tool === "readfile";
 }
 
 /**
@@ -517,6 +571,14 @@ function isEditTool(name) {
 
 /**
  * @param {string} name
+ */
+function isCommandTool(name) {
+  const tool = normTool(name);
+  return tool === "shell" || tool === "runterminalcmd";
+}
+
+/**
+ * @param {string} name
  * @param {string} command
  */
 function isSearch(name, command) {
@@ -524,13 +586,14 @@ function isSearch(name, command) {
   if (
     tool === "grep" ||
     tool === "glob" ||
+    tool === "globfilesearch" ||
     tool === "search" ||
     tool === "ripgrep" ||
     tool === "rg"
   ) {
     return true;
   }
-  return normTool(name) === "shell" && RG_COMMAND.test(command);
+  return isCommandTool(name) && RG_COMMAND.test(command);
 }
 
 /**
@@ -557,7 +620,12 @@ function normalizePath(path) {
  */
 function isCorePath(path) {
   const normalized = normalizePath(path);
-  return normalized === "kodaelus/core.md" || normalized.endsWith("/kodaelus/core.md");
+  return (
+    normalized === "kodaelus/core.md" ||
+    normalized.endsWith("/kodaelus/core.md") ||
+    normalized === "policy/core.md" ||
+    normalized.endsWith("/policy/core.md")
+  );
 }
 
 /**
@@ -634,6 +702,11 @@ function stringContent(value) {
       })
       .filter(Boolean)
       .join("\n");
+  }
+  if (value && typeof value === "object") {
+    const nested = value.value && typeof value.value === "object" ? value.value : null;
+    const deep = nested && nested.value && typeof nested.value === "object" ? nested.value : null;
+    return firstString(value.output, value.content, nested && nested.content, deep && deep.content);
   }
   return "";
 }

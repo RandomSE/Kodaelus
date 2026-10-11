@@ -1,0 +1,7 @@
+{"role":"assistant","message":{"content":[{"type":"text","text":"Plan\nMeasure this run.\nConfidence: 84% | Evidence: policy/core.md:1"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"read_file","input":{"target_file":"policy/core.md"}}]}}
+{"role":"tool","message":{"content":[{"type":"tool_result","output":"section bytes"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"glob_file_search","input":{"glob_pattern":"*.md","target_directory":"policy"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"run_terminal_cmd","input":{"command":"dotnet test"},"output":"failed"}]},"exitCode":1}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"search_replace","input":{"file_path":"policy/notes.md","old_string":"alpha","new_string":"beta"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"read_file","input":{"target_file":"policy/core.md"}}]}}
