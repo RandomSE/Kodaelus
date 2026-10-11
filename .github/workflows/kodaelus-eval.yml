@@ -1,0 +1,30 @@
+name: Kodaelus eval
+
+on:
+  pull_request:
+    paths:
+      - "evals/**"
+      - "scripts/kodaelus-eval.mjs"
+      - "install/lib/kodaelus-eval.mjs"
+      - "install/lib/kodaelus-eval.test.mjs"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Good fixture passes
+        run: node scripts/kodaelus-eval.mjs evals/fixtures/good.jsonl
+      - name: Bad fixture fails
+        run: |
+          set +e
+          node scripts/kodaelus-eval.mjs evals/fixtures/bad.jsonl
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "bad fixture must exit non-zero"
+            exit 1
+          fi

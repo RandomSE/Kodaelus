@@ -14,7 +14,8 @@
     "uninstall:global": "node install/install.mjs --uninstall",
     "test:hooks": "node scripts/run-node-tests.mjs install/hooks",
     "test:install": "node scripts/run-node-tests.mjs install/lib",
-    "test": "npm run test:hooks && npm run test:install"
+    "test": "npm run test:hooks && npm run test:install",
+    "eval:transcripts": "node scripts/kodaelus-eval.mjs evals"
   },
   "engines": {
     "node": ">=20"
