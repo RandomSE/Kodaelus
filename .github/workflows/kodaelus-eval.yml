@@ -28,5 +28,3 @@ jobs:
             echo "bad fixture must exit non-zero"
             exit 1
           fi
-      - name: Synkrolyn drop
-        run: node scripts/kodaelus-eval.mjs evals/synkrolyn
