@@ -1,6 +1,15 @@
 name: Kodaelus eval
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "kodaelus/**"
+      - "tools/**"
+      - "evals/**"
+      - "install/lib/kodaelus-eval.mjs"
+      - "install/lib/kodaelus-eval.test.mjs"
+      - "scripts/kodaelus-eval.mjs"
   pull_request:
     paths:
       - "kodaelus/**"

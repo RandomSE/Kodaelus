@@ -322,3 +322,69 @@ test("the evals tree is not a behaviour-check or category regression", () => {
   assert.equal(result.exitCode, 0);
   assert.ok(result.runCount >= 11);
 });
+
+test("cursor-tools fixture counts re-reads, nested tool output, and dotnet test", () => {
+  const result = evaluatePath(join(fixturesDir, "cursor-tools.jsonl"));
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.runCount, 1);
+  const run = result.runs[0];
+  assert.equal(run.rereadCount, 1);
+  assert.deepEqual(run.rereadCounts, { "kodaelus/core.md": 1 });
+  assert.ok(run.tokens.reads > 0);
+  assert.ok(run.tokens.search > 0);
+  assert.ok(run.tokens.edits > 0);
+  assert.ok(run.tokens["tool-output"] > 0);
+  assert.ok(run.shares.reasoning < 1);
+  assert.equal(run.checks.coreRead, "pass");
+  assert.equal(run.checks.testBeforeEdit, "pass");
+  assert.equal(run.checks.planBeforeEdit, "pass");
+  assert.equal(run.checks.confidenceEvidence, "pass");
+  assert.equal(run.categoryGate.status, "skip");
+  assert.ok(run.largestOutputs.some((item) => item.label === "dotnet test"));
+  assert.match(run.largestSearches[0].label, /glob_file_search/);
+});
+
+test("failing dotnet build before a product edit passes test-before-edit", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nBuild.\nConfidence: 80% | Evidence: src/App.cs:1",
+    }),
+    JSON.stringify({ tool: "read_file", tool_args: { target_file: "kodaelus/core.md" } }),
+    JSON.stringify({
+      tool: "run_terminal_cmd",
+      tool_args: { command: "dotnet build" },
+      exitCode: 1,
+    }),
+    JSON.stringify({ tool: "search_replace", tool_args: { path: "src/App.cs", new_string: "b" } }),
+  ].join("\n");
+  const { file } = tempJsonl("dotnet-build.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "pass");
+  assert.equal(result.runs[0].checks.coreRead, "pass");
+});
+
+test("dotnet run before a product edit does not satisfy test-before-edit", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nRun.\nConfidence: 80% | Evidence: src/App.cs:1",
+    }),
+    JSON.stringify({ tool: "Read", path: "kodaelus/core.md", content: "abcd" }),
+    JSON.stringify({ tool: "run_terminal_cmd", tool_args: { command: "dotnet run" }, exitCode: 1 }),
+    JSON.stringify({ tool: "StrReplace", path: "src/App.cs", content: "b" }),
+  ].join("\n");
+  const { file } = tempJsonl("dotnet-run.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "fail");
+  assert.equal(result.runs[0].checks.coreRead, "pass");
+});
+
+test("a string output field on a tool result contributes tokens", () => {
+  const { file } = tempJsonl(
+    "output-field.jsonl",
+    JSON.stringify({ role: "tool", output: "x".repeat(40) }),
+  );
+  const result = evaluatePath(file);
+  assert.ok(result.runs[0].tokens["tool-output"] > 0);
+});

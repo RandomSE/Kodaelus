@@ -1,0 +1,7 @@
+{"note":"synthetic","role":"assistant","content":"## Plan\nCount Cursor tool names.\nConfidence: 90% | Evidence: install/lib/kodaelus-eval.mjs:642"}
+{"tool":"read_file","tool_args":{"target_file":"kodaelus/core.md"}}
+{"role":"tool","type":"tool_result","value":{"value":{"content":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}}
+{"tool":"glob_file_search","tool_args":{"glob_pattern":"*.cs","target_directory":"src"}}
+{"tool":"run_terminal_cmd","tool_args":{"command":"dotnet test"},"exitCode":1}
+{"tool":"search_replace","tool_args":{"path":"src/App.cs","old_string":"a","new_string":"b"}}
+{"tool":"read_file","tool_args":{"target_file":"kodaelus/core.md"}}

@@ -8,8 +8,18 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 import { basename, dirname, join, resolve } from "node:path";
 
 const CATEGORIES = ["reads", "re-reads", "search", "edits", "reasoning", "tool-output"];
-const TEST_COMMAND = /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/;
+const TEST_COMMAND_PATTERNS = [
+  /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/,
+  /(?:^|\s)dotnet (?:test|build)(?:\s|$)/,
+];
 const RG_COMMAND = /(?:^|\s|[;&|])rg(?:\s|$)/;
+
+/**
+ * @param {string} command
+ */
+function isTestCommand(command) {
+  return TEST_COMMAND_PATTERNS.some((pattern) => pattern.test(command || ""));
+}
 
 /**
  * @param {string} target file or directory
@@ -235,7 +245,7 @@ function eventsFrom(obj, rawLine) {
     } else if (obj.role === "tool" || obj.type === "tool_result") {
       events.push({
         kind: "tool-output",
-        content,
+        content: toolResultText(obj) || content,
         exitCode: numericExit(obj),
         usage: null,
         raw: rawLine,
@@ -287,7 +297,7 @@ function eventsFromBlocks(obj, rawLine, usage) {
     if (block.type === "tool_result") {
       events.push({
         kind: "tool-output",
-        content: toolResultText(block.content ?? block.output ?? block.text ?? ""),
+        content: toolResultText(block),
         exitCode: numericExit(block),
         command: "",
         usage: null,
@@ -421,7 +431,7 @@ function classify(event, readPaths) {
   if (event.kind === "reasoning") {
     return { category: "reasoning", label: "assistant" };
   }
-  if (normTool(tool) === "shell") {
+  if (isShellTool(tool)) {
     return { category: "tool-output", label: outputLabel(event) };
   }
   return null;
@@ -455,7 +465,7 @@ function behaviorChecks(events) {
       if (isCorePath(event.path || "")) sawCore = true;
     }
 
-    if (TEST_COMMAND.test(event.command || "")) {
+    if (isTestCommand(event.command || "")) {
       seenTest = true;
       if (isFailure(event) && !seenProduct) {
         seenFailedTest = true;
@@ -640,7 +650,8 @@ function normTool(name) {
  * @param {string} name
  */
 function isReadTool(name) {
-  return normTool(name) === "read";
+  const tool = normTool(name);
+  return tool === "read" || tool === "readfile";
 }
 
 /**
@@ -655,6 +666,14 @@ function isEditTool(name) {
 
 /**
  * @param {string} name
+ */
+function isShellTool(name) {
+  const tool = normTool(name);
+  return tool === "shell" || tool === "runterminalcmd";
+}
+
+/**
+ * @param {string} name
  * @param {string} command
  */
 function isSearch(name, command) {
@@ -662,13 +681,14 @@ function isSearch(name, command) {
   if (
     tool === "grep" ||
     tool === "glob" ||
+    tool === "globfilesearch" ||
     tool === "search" ||
     tool === "ripgrep" ||
     tool === "rg"
   ) {
     return true;
   }
-  return normTool(name) === "shell" && RG_COMMAND.test(command);
+  return isShellTool(name) && RG_COMMAND.test(command);
 }
 
 /**
@@ -760,7 +780,7 @@ function payloadFrom(tool, input) {
   if (isSearch(tool, input.command || "")) {
     return firstString(input.content, input.pattern, input.command, input.path);
   }
-  if (normTool(tool) === "shell") return firstString(input.content, input.command);
+  if (isShellTool(tool)) return firstString(input.content, input.command);
   return firstString(input.content, input.command, input.pattern, input.path);
 }
 
@@ -786,10 +806,41 @@ function objectField(value) {
  */
 function toolResultText(value) {
   if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    return firstString(value.content, value.output, value.text);
+  const obj = objectField(value);
+  if (!obj) return "";
+  return textFromFields(obj) || textFromNestedValue(obj) || scalarOrOneLevel(obj.result);
+}
+
+/**
+ * @param {object} obj
+ */
+function textFromFields(obj) {
+  for (const key of ["content", "output", "text"]) {
+    const found = scalarOrOneLevel(obj[key]);
+    if (found) return found;
   }
   return "";
+}
+
+/**
+ * @param {object} obj
+ */
+function textFromNestedValue(obj) {
+  const nested = objectField(obj.value);
+  if (!nested) return "";
+  const deeper = objectField(nested.value);
+  return textFromFields(nested) || (deeper ? textFromFields(deeper) : "");
+}
+
+/**
+ * A string, or one object level of content, output, or text.
+ * @param {unknown} value
+ */
+function scalarOrOneLevel(value) {
+  if (typeof value === "string" && value.length > 0) return value;
+  const obj = objectField(value);
+  if (!obj) return "";
+  return firstString(obj.content, obj.output, obj.text, obj.result);
 }
 
 function firstString(...values) {
