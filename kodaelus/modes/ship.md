@@ -21,7 +21,7 @@
 
 ## Phase boundary
 
-At the end of each phase or follow-up item, write `.kodaelus/HANDOFF.md` with: current state, decisions, open items, and relevant files with line ranges. The next phase is a fresh agent whose first read is that file, then only the listed ranges. That agent has an empty ledger, so it reads policy once under the read protocol in `core.md`. This does not shrink unique content. It shrinks context re-sent to the next agent. Do not commit the handoff unless the user asks. Modes other than Ship do not write this file.
+Follow the phase handoff in `core.md`. Ship does not restate it.
 
 ## Ship response structure
 

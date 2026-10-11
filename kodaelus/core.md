@@ -89,15 +89,15 @@ Read this pack once, on the first substantive turn of a run. That read satisfies
 
 ### Read ledger
 
-The first read of a file may be the whole file. After that, read only the lines about to change, plus about 20 lines of surrounding context. Do not re-read a file that has not changed since the last read in this run. Continue from that read and from the diff of your own edits. Re-read the needed range when the file changed outside your edits (the concurrent-modification safeguard) or when you need a line range you have not read.
+The first read of a file may be the whole file. After that, read only the lines about to change, plus about 20 lines of surrounding context. Do not re-read a file that has not changed since the last read in this run, unless the content is no longer in context (for example after compaction); then read only the needed range. Continue from that read and from the diff of your own edits. Re-read the needed range when the file changed outside your edits (the concurrent-modification safeguard) or when you need a line range you have not read.
 
-Before editing a file over about 600 lines, if the planned change spans more than one cohesive responsibility and existing tests cover the behavior, split it first into cohesive units as a refactor with no behavior change. Follow `tasks/refactor.md`: blast radius, then pre/post baselines under `.kodaelus/baselines/`. A single-site fix inside one responsibility stays in place. Example only: a node class might become elections, replication, reads, snapshots, and membership.
+Before editing a file over about 600 lines, if the planned change spans more than one cohesive responsibility and existing tests cover the behavior, split it only at a phase boundary, with all tests green, as its own behavior-preserving commit. Never split while a test is red. Follow `tasks/refactor.md`: blast radius, then pre/post baselines under `.kodaelus/baselines/`. A single-site fix inside one responsibility stays in place.
 
-The ledger is working memory for the run. Do not add a new ledger file. `.kodaelus/HANDOFF.md` is the only cross-agent record. Only Ship mode writes it.
+The ledger is working memory for the run. Do not add a new ledger file. When a mode splits work into phases, write `.kodaelus/HANDOFF.md` at each phase boundary with: current state, decisions, open items, relevant files with line ranges, and failing tests. The next phase starts from that file, not from prior context. Do not commit the handoff unless the user asks.
 
 ### Search protocol
 
-Locate first with a file list or a count (`rg -l` or the search tool's files-and-counts mode). Then read matches with a cap: about 5 matches, or about 40 lines of context. Search a symbol or path you already know. A broad word is not the first search. Do not repeat an identical search in the same run. Identical means the same pattern, path, and glob after whitespace is normalized. A narrower pattern is a different search.
+Locate first with a file list or a count (`rg -l` or the search tool's files-and-counts mode). Then read matches with a cap: about 5 matches, or about 40 lines of context. Search a symbol or path you already know. A broad word is not the first search. Do not repeat an identical search in the same run unless files in scope changed. Identical means the same pattern, path, and glob after whitespace is normalized. A narrower pattern is a different search.
 
 ### Edit protocol
 
@@ -105,7 +105,7 @@ Use small anchored replacements. Do not rewrite an existing file, or a large blo
 
 ### Plan-once
 
-Write one short plan per work item at the start, then act. Do not re-plan unless a test result contradicts that plan. After two failed attempts at the same item, stop guessing. Write an Escalation Block: one paragraph hypothesis plus one instrumentation step. Example only: a socket loop that keeps being re-reasoned from the same code.
+Write one short plan per work item at the start, then act. Do not re-plan unless a test result contradicts that plan. An attempt is one code change plus one test or CI run on the same failure. After two failed attempts, state a falsifiable hypothesis, add instrumentation or a deterministic repro, then continue. Escalate to the user only after the active mode's repair-cycle cap, not after two attempts.
 
 ### Routing
 

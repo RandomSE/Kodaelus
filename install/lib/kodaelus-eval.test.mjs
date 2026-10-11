@@ -37,19 +37,21 @@ test("good synthetic transcript passes behavior checks and skips a missing basel
   assert.ok(run.largestSearches.length >= 1);
   assert.match(run.largestSearches[0].label, /Read protocol/);
   assert.match(result.report, /runs: 1/);
-  assert.match(result.report, /reread count: 1/);
+  assert.match(result.report, /re-read count: 1/);
+  assert.match(result.report, /re-reads by file: kodaelus\/core.md=1/);
   assert.match(result.report, /unique tokens: \d+/);
   assert.match(result.report, /billed: unavailable/);
   assert.match(result.report, /estimator: chars\/4/);
-  assert.match(result.report, /reread=/);
+  assert.match(result.report, /re-reads=/);
   assert.match(result.report, /largest searches:/);
   assert.match(result.report, /category gate: skipped \(no baseline\.json\)/);
   assert.match(result.report, /malformed lines: 0/);
 });
 
-test("bad synthetic transcript fails every behavior check", () => {
+test("bad synthetic transcript fails every behavior check and is not a regression", () => {
   const result = evaluatePath(join(fixturesDir, "bad.jsonl"));
-  assert.equal(result.exitCode, 1);
+  assert.equal(result.runs[0].exitCode, 1);
+  assert.equal(result.exitCode, 0);
   const run = result.runs[0];
   assert.equal(run.checks.testBeforeEdit, "fail");
   assert.equal(run.checks.coreRead, "fail");
@@ -61,10 +63,10 @@ test("bad synthetic transcript fails every behavior check", () => {
   assert.match(result.report, /confidence-evidence=fail/);
 });
 
-test("fixtures directory exits non-zero while the good transcript still passes", () => {
+test("fixtures directory is not a regression when bad fails and good passes", () => {
   const result = evaluatePath(fixturesDir);
-  assert.equal(result.exitCode, 1);
-  assert.equal(result.runCount, 2);
+  assert.equal(result.exitCode, 0);
+  assert.ok(result.runCount >= 2);
   const good = result.runs.find((run) => run.file.endsWith("good.jsonl"));
   const bad = result.runs.find((run) => run.file.endsWith("bad.jsonl"));
   assert.ok(good);
@@ -88,7 +90,10 @@ test("a parent scan skips child fixtures directories", () => {
   assert.equal(result.exitCode, 0);
   assert.match(result.report, /runs: 0/);
   assert.match(result.report, /category gate: skipped \(no transcript\)/);
-  assert.equal(evaluatePath(fixtures).exitCode, 1);
+  const direct = evaluatePath(fixtures);
+  assert.equal(direct.runCount, 1);
+  assert.equal(direct.runs[0].exitCode, 1);
+  assert.equal(direct.exitCode, 0);
 });
 
 test("a transcript with no relevant events skips each behavior check", () => {
@@ -168,9 +173,9 @@ test("category gate fails only when a share is greater than baseline times 1.10"
   const { dir, file } = tempJsonl("gated.jsonl", lines);
   const open = evaluatePath(file);
   assert.equal(open.runs[0].categoryGate.status, "skip");
-  assert.equal(open.runs[0].shares.reread, 0.55);
+  assert.equal(open.runs[0].shares["re-reads"], 0.55);
 
-  writeFileSync(join(dir, "baseline.json"), JSON.stringify({ shares: { reread: 0.4 } }), "utf8");
+  writeFileSync(join(dir, "baseline.json"), JSON.stringify({ shares: { "re-reads": 0.4 } }), "utf8");
   const over = evaluatePath(file);
   assert.equal(over.exitCode, 1);
   assert.equal(over.runs[0].checks.testBeforeEdit, "pass");
@@ -178,9 +183,9 @@ test("category gate fails only when a share is greater than baseline times 1.10"
   assert.match(over.report, /category gate: fail/);
   assert.match(over.report, /1\.10/);
 
-  writeFileSync(join(dir, "baseline.json"), JSON.stringify({ shares: { reread: 0.5 } }), "utf8");
+  writeFileSync(join(dir, "baseline.json"), JSON.stringify({ shares: { "re-reads": 0.5 } }), "utf8");
   const boundary = evaluatePath(file);
-  assert.equal(boundary.runs[0].shares.reread, 0.55);
+  assert.equal(boundary.runs[0].shares["re-reads"], 0.55);
   assert.equal(boundary.runs[0].categoryGate.status, "pass");
   assert.equal(boundary.exitCode, 0);
 });
@@ -251,7 +256,7 @@ test("write-baseline records measured shares and refuses an empty drop", () => {
   const baselinePath = join(dir, "baseline.json");
   assert.equal(existsSync(baselinePath), true);
   const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
-  assert.equal(typeof baseline.shares.reread, "number");
+  assert.equal(typeof baseline.shares["re-reads"], "number");
   assert.equal(baseline.shares.reasoning, written.runs[0].shares.reasoning);
 
   const emptyDir = mkdtempSync(join(tmpdir(), "kodaelus-eval-empty-"));
@@ -259,4 +264,61 @@ test("write-baseline records measured shares and refuses an empty drop", () => {
   assert.equal(empty.exitCode, 1);
   assert.equal(existsSync(join(emptyDir, "baseline.json")), false);
   assert.match(empty.report, /not writing baseline\.json/);
+});
+
+test("each behavior check has a positive and a negative fixture", () => {
+  const checks = ["testBeforeEdit", "coreRead", "planBeforeEdit", "confidenceEvidence"];
+  for (const check of checks) {
+    const pos = evaluatePath(join(fixturesDir, `${check}.positive.jsonl`));
+    assert.equal(pos.runs[0].checks[check], "pass", check);
+    assert.equal(pos.runs[0].exitCode, 0, check);
+    assert.equal(pos.exitCode, 0, check);
+    const neg = evaluatePath(join(fixturesDir, `${check}.negative.jsonl`));
+    assert.equal(neg.runs[0].checks[check], "fail", check);
+    assert.equal(neg.runs[0].exitCode, 1, check);
+    assert.equal(neg.exitCode, 0, check);
+    for (const other of checks) {
+      if (other === check) continue;
+      assert.equal(neg.runs[0].checks[other], "pass", `${check} also failed ${other}`);
+    }
+  }
+});
+
+test("anonymised transcript matches hand counts and stays within the baseline", () => {
+  const result = evaluatePath(join(repoRoot, "evals", "anon.jsonl"));
+  assert.equal(result.runCount, 1);
+  assert.equal(result.exitCode, 0);
+  const run = result.runs[0];
+  assert.deepEqual(run.tokens, {
+    reads: 4,
+    "re-reads": 4,
+    search: 2,
+    edits: 2,
+    reasoning: 19,
+    "tool-output": 19,
+  });
+  assert.equal(run.rereadCount, 1);
+  assert.deepEqual(run.rereadCounts, { "policy/core.md": 1 });
+  assert.equal(run.largestOutputs[0].tokens, 10);
+  assert.equal(run.largestOutputs[0].label.length, 40);
+  assert.equal(run.largestOutputs[1].tokens, 5);
+  assert.equal(run.largestOutputs[1].label.length, 20);
+  assert.equal(run.largestOutputs[2].label, "not ok");
+  assert.equal(run.largestOutputs[2].tokens, 2);
+  assert.equal(run.largestOutputs[3].label, "npm test");
+  assert.equal(run.largestOutputs[3].tokens, 2);
+  assert.equal(run.checks.testBeforeEdit, "pass");
+  assert.equal(run.checks.coreRead, "pass");
+  assert.equal(run.checks.planBeforeEdit, "pass");
+  assert.equal(run.checks.confidenceEvidence, "pass");
+  assert.equal(run.categoryGate.status, "pass");
+  assert.equal(run.tokenLabel, "estimator: chars/4");
+  assert.match(result.report, /re-reads by file: policy\/core.md=1/);
+  assert.match(result.report, /runs: 1/);
+});
+
+test("the evals tree is not a behaviour-check or category regression", () => {
+  const result = evaluatePath(join(repoRoot, "evals"));
+  assert.equal(result.exitCode, 0);
+  assert.ok(result.runCount >= 11);
 });
