@@ -15,7 +15,8 @@
     "test:hooks": "node scripts/run-node-tests.mjs install/hooks",
     "test:install": "node scripts/run-node-tests.mjs install/lib",
     "test": "npm run test:hooks && npm run test:install",
-    "eval:transcripts": "node scripts/kodaelus-eval.mjs evals"
+    "eval:transcripts": "node scripts/kodaelus-eval.mjs evals",
+    "eval:local": "node tools/kodaelus-eval.mjs --expect evals/local"
   },
   "engines": {
     "node": ">=20"

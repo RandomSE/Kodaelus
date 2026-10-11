@@ -32,3 +32,6 @@ Thumbs.db
 
 # OneDrive / Windows junk
 desktop.ini
+
+# Local real-transcript eval fixtures (never committed)
+evals/local/
