@@ -4,10 +4,10 @@
  *
  * Usage: node scripts/kodaelus-eval.mjs <dir-or-jsonl> [--write-baseline]
  *
- * A directory scan skips child directories named fixtures.
- * Pass evals/fixtures itself to evaluate the synthetic pair.
+ * Files named bad.jsonl or ending in .negative.jsonl are expected to fail
+ * their behavior checks. The process exits 0 when that happens and every
+ * other transcript passes, including the category gate.
  */
-import { resolve, sep } from "node:path";
 import { evaluatePath } from "../install/lib/kodaelus-eval.mjs";
 
 const args = process.argv.slice(2);
@@ -19,7 +19,6 @@ if (!target) {
   process.exit(1);
 }
 
-const skipChildFixtures = !resolve(target).split(sep).includes("fixtures");
-const result = evaluatePath(target, { skipChildFixtures, writeBaseline });
+const result = evaluatePath(target, { skipChildFixtures: false, writeBaseline });
 process.stdout.write(result.report.endsWith("\n") ? result.report : `${result.report}\n`);
 process.exit(result.exitCode);

@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
-const CATEGORIES = ["reread", "search", "edit", "reasoning", "other"];
+const CATEGORIES = ["reads", "re-reads", "search", "edits", "reasoning", "tool-output"];
 const TEST_COMMAND = /(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/;
 const RG_COMMAND = /(?:^|\s|[;&|])rg(?:\s|$)/;
 
@@ -56,7 +56,7 @@ export function evaluatePath(target, options = {}) {
     }
   }
 
-  const exitCode = runs.some((run) => run.exitCode !== 0) ? 1 : 0;
+  const exitCode = runs.some((run) => isRegression(run)) ? 1 : 0;
   const report = [`runs: ${runs.length}`, ...runs.map(formatRun)].join("\n\n");
   return {
     exitCode,
@@ -118,6 +118,8 @@ function evaluateFile(file) {
     checks,
     categoryGate,
     rereadCount: tallied.rereadCount,
+    rereadCounts: tallied.rereadCounts,
+    largestOutputs: tallied.largestOutputs,
     billed: tallied.billed,
     tokenLabel: tallied.tokenLabel,
     uniqueTokens: tallied.uniqueTokens,
@@ -157,31 +159,99 @@ function parseJsonl(text) {
  */
 function eventsFrom(obj, rawLine) {
   const usage = extractUsage(obj);
-  if (Array.isArray(obj.content)) {
-    const fromBlocks = eventsFromBlocks(obj, rawLine, usage);
-    if (fromBlocks.length > 0) return fromBlocks;
+  /** @type {object[]} */
+  const events = [];
+
+  if (typeof obj.thinking === "string" && obj.thinking.length > 0) {
+    events.push({ kind: "reasoning", content: obj.thinking, usage: null, raw: rawLine });
   }
 
-  const content = stringContent(obj.content ?? obj.text ?? obj.output ?? obj.result ?? "");
-  const path = firstString(obj.path, obj.file_path, obj.filePath, obj.input?.path, obj.arguments?.path);
-  const command = firstString(obj.command, obj.input?.command, obj.arguments?.command);
-  const pattern = firstString(obj.pattern, obj.input?.pattern, obj.arguments?.pattern);
-  const exitCode = numericExit(obj);
-  const tool = firstString(obj.tool, obj.toolName, obj.tool_name);
+  const blocks = Array.isArray(obj.content)
+    ? obj.content
+    : obj.message && Array.isArray(obj.message.content)
+      ? obj.message.content
+      : null;
 
-  if (tool) {
-    return [{ tool, path, command, pattern, content, exitCode, usage, raw: rawLine }];
+  if (blocks) {
+    events.push(...eventsFromBlocks({ ...obj, content: blocks }, rawLine, null));
   }
-  if (obj.role === "tool" || obj.type === "tool_result") {
-    const name = firstString(obj.name, obj.tool);
-    if (name) {
-      return [{ tool: name, path, command, pattern, content, exitCode, usage, raw: rawLine }];
+
+  const args = objectField(obj.tool_args) || objectField(obj.input) || objectField(obj.arguments);
+  const tool = firstString(obj.tool, obj.toolName, obj.tool_name, blocks ? "" : obj.name);
+  const alreadyHasTool = events.some((event) => event.tool);
+
+  if (
+    !blocks &&
+    typeof obj.content === "string" &&
+    obj.content.length > 0 &&
+    !tool &&
+    !args &&
+    (obj.role === "assistant" || obj.kind === "reasoning")
+  ) {
+    events.push({ kind: "reasoning", content: obj.content, usage: null, raw: rawLine });
+  }
+
+  if (!alreadyHasTool && tool) {
+    const input = args || {};
+    const command = firstString(obj.command, input.command);
+    const path = firstString(
+      obj.path,
+      obj.file_path,
+      obj.filePath,
+      input.path,
+      input.file_path,
+      input.target_file,
+      input.target_directory,
+    );
+    const pattern = firstString(obj.pattern, input.pattern, input.glob_pattern);
+    const explicit = blocks ? "" : stringContent(obj.content ?? obj.text ?? obj.output ?? obj.result ?? "");
+    events.push({
+      tool,
+      path,
+      command,
+      pattern,
+      content: explicit || payloadFrom(tool, { ...input, command, path, pattern }),
+      exitCode: numericExit(obj),
+      usage: null,
+      raw: rawLine,
+    });
+  }
+
+  if (obj.tool_result !== undefined && obj.tool_result !== null) {
+    events.push({
+      kind: "tool-output",
+      content: toolResultText(obj.tool_result),
+      exitCode: numericExit(obj.tool_result) ?? numericExit(obj),
+      command: "",
+      usage: null,
+      raw: rawLine,
+    });
+  }
+
+  if (events.length === 0) {
+    const content = stringContent(obj.content ?? obj.text ?? obj.output ?? obj.result ?? "");
+    if (obj.role === "user") {
+      events.push({ kind: "skip", content, usage: null, raw: rawLine });
+    } else if (obj.role === "tool" || obj.type === "tool_result") {
+      events.push({
+        kind: "tool-output",
+        content,
+        exitCode: numericExit(obj),
+        usage: null,
+        raw: rawLine,
+      });
+    } else if (obj.role === "assistant" || obj.kind === "reasoning") {
+      events.push({ kind: "reasoning", content, usage: null, raw: rawLine });
+    } else {
+      events.push({ kind: "skip", content, usage: null, raw: rawLine });
     }
   }
-  if (obj.role === "assistant" || obj.kind === "reasoning") {
-    return [{ kind: "reasoning", content, usage, raw: rawLine }];
+
+  if (usage && events.length > 0) {
+    const carrier = events.find((event) => event.kind !== "skip") || events[0];
+    carrier.usage = usage;
   }
-  return [{ kind: "other", content: content || rawLine, usage, raw: rawLine }];
+  return events;
 }
 
 /**
@@ -198,13 +268,28 @@ function eventsFromBlocks(obj, rawLine, usage) {
     if (!block || typeof block !== "object") continue;
     if (block.type === "tool_use" || block.type === "tool_call") {
       const input = block.input && typeof block.input === "object" ? block.input : {};
+      const tool = firstString(block.name, block.tool);
+      const command = firstString(input.command);
+      const path = firstString(input.path, input.file_path, input.target_file, input.target_directory);
+      const pattern = firstString(input.pattern, input.glob_pattern);
       events.push({
-        tool: firstString(block.name, block.tool),
-        path: firstString(input.path, input.file_path, input.target_file),
-        command: firstString(input.command),
-        pattern: firstString(input.pattern),
-        content: "",
-        exitCode: undefined,
+        tool,
+        path,
+        command,
+        pattern,
+        content: payloadFrom(tool, { ...input, command, path, pattern }),
+        exitCode: numericExit(input),
+        usage: null,
+        raw: rawLine,
+      });
+      continue;
+    }
+    if (block.type === "tool_result") {
+      events.push({
+        kind: "tool-output",
+        content: toolResultText(block.content ?? block.output ?? block.text ?? ""),
+        exitCode: numericExit(block),
+        command: "",
         usage: null,
         raw: rawLine,
       });
@@ -212,7 +297,7 @@ function eventsFromBlocks(obj, rawLine, usage) {
     }
     if (typeof block.text === "string") texts.push(block.text);
   }
-  if (texts.length > 0 && (obj.role === "assistant" || events.length === 0)) {
+  if (texts.length > 0 && obj.role !== "user") {
     events.unshift({
       kind: "reasoning",
       content: texts.join("\n"),
@@ -228,11 +313,15 @@ function eventsFromBlocks(obj, rawLine, usage) {
  * @param {object[]} events
  */
 function tally(events) {
-  const tokens = { reread: 0, search: 0, edit: 0, reasoning: 0, other: 0 };
+  const tokens = Object.fromEntries(CATEGORIES.map((key) => [key, 0]));
   const seenHash = new Set();
   const readPaths = new Set();
   /** @type {{ label: string, tokens: number }[]} */
   const searches = [];
+  /** @type {{ label: string, tokens: number }[]} */
+  const outputs = [];
+  /** @type {Record<string, number>} */
+  const rereadCounts = {};
   const fields = new Set();
   let sawEstimate = false;
   let billedSum = 0;
@@ -241,7 +330,10 @@ function tally(events) {
   let rereadCount = 0;
 
   for (const event of events) {
-    const payload = event.content ? event.content : event.raw || "";
+    const kind = classify(event, readPaths);
+    if (!kind) continue;
+
+    const payload = typeof event.content === "string" ? event.content : "";
     let amount = 0;
     if (event.usage) {
       amount = event.usage.tokens;
@@ -259,15 +351,22 @@ function tally(events) {
       uniqueTokens += amount;
     }
 
-    const kind = classify(event, readPaths);
-    if (kind.category === "reread") rereadCount += 1;
+    if (kind.category === "re-reads") {
+      rereadCount += 1;
+      const label = kind.label || "(unknown)";
+      rereadCounts[label] = (rereadCounts[label] || 0) + 1;
+    }
     tokens[kind.category] += amount;
     if (kind.category === "search") {
       searches.push({ label: kind.label, tokens: amount });
     }
+    if (kind.category === "tool-output" && amount > 0) {
+      outputs.push({ label: kind.label, tokens: amount });
+    }
   }
 
   searches.sort((a, b) => b.tokens - a.tokens || a.label.localeCompare(b.label));
+  outputs.sort((a, b) => b.tokens - a.tokens || a.label.localeCompare(b.label));
   const total = CATEGORIES.reduce((sum, key) => sum + tokens[key], 0);
   const shares = {};
   for (const key of CATEGORIES) {
@@ -286,8 +385,10 @@ function tally(events) {
     tokens,
     shares,
     rereadCount,
+    rereadCounts,
     uniqueTokens,
     largestSearches: searches,
+    largestOutputs: outputs,
     billed: sawUsage ? billedSum : null,
     tokenLabel,
   };
@@ -298,25 +399,32 @@ function tally(events) {
  * @param {Set<string>} readPaths
  */
 function classify(event, readPaths) {
+  if (event.kind === "skip") return null;
+  if (event.kind === "tool-output") {
+    return { category: "tool-output", label: outputLabel(event) };
+  }
   const tool = event.tool || "";
   if (isReadTool(tool)) {
     const path = normalizePath(event.path || "");
     if (path && readPaths.has(path)) {
-      return { category: "reread", label: path };
+      return { category: "re-reads", label: path };
     }
     if (path) readPaths.add(path);
-    return { category: "other", label: path };
+    return { category: "reads", label: path };
   }
   if (isSearch(tool, event.command || "")) {
     return { category: "search", label: searchLabel(event) };
   }
   if (isEditTool(tool)) {
-    return { category: "edit", label: event.path || tool };
+    return { category: "edits", label: event.path || tool };
   }
   if (event.kind === "reasoning") {
     return { category: "reasoning", label: "assistant" };
   }
-  return { category: "other", label: "other" };
+  if (normTool(tool) === "shell") {
+    return { category: "tool-output", label: outputLabel(event) };
+  }
+  return null;
 }
 
 /**
@@ -420,30 +528,60 @@ function categoryGateFor(file, actual) {
  */
 function formatRun(run) {
   const shareText = CATEGORIES.map((key) => `${key}=${run.shares[key].toFixed(4)}`).join(" ");
-  const searches =
-    run.largestSearches.length === 0
-      ? "none"
-      : run.largestSearches
-          .slice(0, 5)
-          .map((item) => `${item.label} (${item.tokens})`)
-          .join("; ");
   const billed = run.billed === null ? "unavailable" : String(run.billed);
   const gate =
     run.categoryGate.status === "skip"
       ? `category gate: skipped (${run.categoryGate.detail})`
       : `category gate: ${run.categoryGate.status} (${run.categoryGate.detail})`;
+  const files = Object.keys(run.rereadCounts || {}).sort();
+  const byFile =
+    files.length === 0
+      ? "none"
+      : files.map((file) => `${file}=${run.rereadCounts[file]}`).join("; ");
   return [
     `file: ${basename(run.file)}`,
     `token label: ${run.tokenLabel}`,
     `billed: ${billed}`,
     `unique tokens: ${run.uniqueTokens}`,
-    `reread count: ${run.rereadCount}`,
+    `re-read count: ${run.rereadCount}`,
+    `re-reads by file: ${byFile}`,
     `shares: ${shareText}`,
-    `largest searches: ${searches}`,
+    `largest searches: ${formatList(run.largestSearches)}`,
+    `largest outputs: ${formatList(run.largestOutputs)}`,
     `checks: test-before-edit=${run.checks.testBeforeEdit} core-read=${run.checks.coreRead} plan-before-edit=${run.checks.planBeforeEdit} confidence-evidence=${run.checks.confidenceEvidence}`,
     gate,
     `malformed lines: ${run.malformed}`,
   ].join("\n");
+}
+
+/**
+ * @param {{ label: string, tokens: number }[]} items
+ */
+function formatList(items) {
+  if (!items || items.length === 0) return "none";
+  return items
+    .slice(0, 5)
+    .map((item) => `${item.label} (${item.tokens})`)
+    .join("; ");
+}
+
+/**
+ * A negative fixture is supposed to fail its checks.
+ * A regression is a positive file that fails, or a negative file that passes.
+ * @param {{ file: string, exitCode: number }} run
+ */
+function isRegression(run) {
+  const negative = expectsNegative(run.file);
+  const failed = run.exitCode !== 0;
+  return negative ? !failed : failed;
+}
+
+/**
+ * @param {string} file
+ */
+function expectsNegative(file) {
+  const name = basename(file);
+  return name === "bad.jsonl" || name.endsWith(".negative.jsonl");
 }
 
 /**
@@ -557,7 +695,7 @@ function normalizePath(path) {
  */
 function isCorePath(path) {
   const normalized = normalizePath(path);
-  return normalized === "kodaelus/core.md" || normalized.endsWith("/kodaelus/core.md");
+  return normalized === "core.md" || normalized.endsWith("/core.md");
 }
 
 /**
@@ -611,8 +749,49 @@ function numericExit(obj) {
 }
 
 /**
- * @param {...unknown} values
+ * @param {string} tool
+ * @param {object} input
  */
+function payloadFrom(tool, input) {
+  if (isEditTool(tool)) {
+    return firstString(input.new_string, input.contents, input.content, input.replacement, input.path);
+  }
+  if (isReadTool(tool)) return firstString(input.content, input.path);
+  if (isSearch(tool, input.command || "")) {
+    return firstString(input.content, input.pattern, input.command, input.path);
+  }
+  if (normTool(tool) === "shell") return firstString(input.content, input.command);
+  return firstString(input.content, input.command, input.pattern, input.path);
+}
+
+/**
+ * @param {object} event
+ */
+function outputLabel(event) {
+  const text = String(event.content || "");
+  if (!text) return "tool-result";
+  return text.length > 40 ? `${text.slice(0, 40)}...` : text;
+}
+
+/**
+ * @param {unknown} value
+ */
+function objectField(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  return null;
+}
+
+/**
+ * @param {unknown} value
+ */
+function toolResultText(value) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    return firstString(value.content, value.output, value.text);
+  }
+  return "";
+}
+
 function firstString(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.length > 0) return value;

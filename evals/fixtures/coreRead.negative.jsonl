@@ -1,0 +1,4 @@
+{"role":"assistant","content":"## Plan\nWork.\nConfidence: 80% | Evidence: policy/core.md:1"}
+{"tool":"Read","path":"src/module.txt","content":"abcd"}
+{"tool":"Shell","command":"npm test","exitCode":1,"content":"not ok"}
+{"tool":"StrReplace","path":"src/module.txt","content":"abcd"}

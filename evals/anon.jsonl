@@ -1,0 +1,8 @@
+{"role":"assistant","thinking":"abcdabcd","message":{"content":[{"type":"text","text":"## Plan\nFix the gate.\nConfidence: 80% | Evidence: policy/core.md:1"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"policy/core.md","limit":40}}]}}
+{"role":"tool","tool_result":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"role":"assistant","name":"Grep","tool_args":{"pattern":"ledger","path":"policy"}}
+{"role":"tool","tool_result":"xxxxxxxxxxxxxxxxxxxx"}
+{"role":"assistant","name":"Shell","tool_args":{"command":"npm test"},"exitCode":1,"tool_result":"not ok"}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"StrReplace","input":{"path":"src/module.txt","old_string":"aaaa","new_string":"xxxxxxxx"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"policy/core.md","offset":1,"limit":20}}]}}

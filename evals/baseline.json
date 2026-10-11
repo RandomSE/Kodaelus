@@ -1,0 +1,11 @@
+{
+  "why": "Initial measured shares for the anonymised transcript. Tokens are chars/4: reads 4, re-reads 4, search 2, edits 2, reasoning 19, tool-output 19, total 50. Update only in a commit that states why.",
+  "shares": {
+    "reads": 0.08,
+    "re-reads": 0.08,
+    "search": 0.04,
+    "edits": 0.04,
+    "reasoning": 0.38,
+    "tool-output": 0.38
+  }
+}
