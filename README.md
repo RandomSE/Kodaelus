@@ -36,6 +36,18 @@ This writes:
 
 **Uninstall:** `npm run uninstall:global`
 
+## Install into a project
+
+Cloud agents and other machines do not have `~/.cursor`. From this checkout, install the policy into the repo they will work in:
+
+```bash
+npm run install:project -- /path/to/repo
+```
+
+That copies `core.md` and the mode files to `.cursor/kodaelus/`, writes `.cursor/rules/kodaelus-load.mdc` with `alwaysApply: true`, and prepends an `AGENTS.md` snippet. The first line of both says the first tool call must Read `.cursor/kodaelus/core.md`, then the active mode file. Work done without that read is invalid.
+
+Where Cursor hooks run, edit and shell tools stay blocked until that read. If `core.md` is not on disk, the guard allows the tool.
+
 ## Use in any project
 
 1. Open any repo in Cursor (no Kodaelus files required in that repo).

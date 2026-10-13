@@ -564,6 +564,8 @@ function classify(event, readPaths) {
 function behaviorChecks(events, config = loadConfig(REPO_CONFIG)) {
   let seenRead = false;
   let sawCore = false;
+  let sawMutation = false;
+  let coreBeforeMutation = false;
   let seenTest = false;
   let seenFailedTest = false;
   let failedBeforeProduct = false;
@@ -581,9 +583,16 @@ function behaviorChecks(events, config = loadConfig(REPO_CONFIG)) {
     confidenceSeen += confidence.seen;
     confidenceBad += confidence.bad;
 
-    if (isReadTool(event.tool || "")) {
+    const tool = event.tool || "";
+    if (isReadTool(tool)) {
       seenRead = true;
-      if (isCorePath(event.path || "")) sawCore = true;
+      if (isCorePath(event.path || "")) {
+        sawCore = true;
+        if (!sawMutation) coreBeforeMutation = true;
+      }
+    }
+    if (!sawMutation && (isEditTool(tool) || isShellTool(tool) || normTool(tool) === "delete")) {
+      sawMutation = true;
     }
 
     if (isTestCommand(event.command || "", config)) {
@@ -609,7 +618,15 @@ function behaviorChecks(events, config = loadConfig(REPO_CONFIG)) {
 
   return {
     testBeforeEdit,
-    coreRead: !seenRead ? "skip" : sawCore ? "pass" : "fail",
+    coreRead: sawMutation
+      ? coreBeforeMutation
+        ? "pass"
+        : "fail"
+      : !seenRead
+        ? "skip"
+        : sawCore
+          ? "pass"
+          : "fail",
     planBeforeEdit: !seenEdit ? "skip" : planBeforeEdit ? "pass" : "fail",
     confidenceEvidence: confidenceSeen === 0 ? "skip" : confidenceBad === 0 ? "pass" : "fail",
   };
@@ -679,7 +696,7 @@ function formatRun(run) {
     `shares: ${shareText}`,
     `largest searches: ${formatList(run.largestSearches)}`,
     `largest outputs: ${formatList(run.largestOutputs)}`,
-    `checks: test-before-edit=${run.checks.testBeforeEdit} core-read=${run.checks.coreRead} plan-before-edit=${run.checks.planBeforeEdit} confidence-evidence=${run.checks.confidenceEvidence}`,
+    `checks: test-before-edit=${run.checks.testBeforeEdit} core.md read before first edit/shell=${run.checks.coreRead} plan-before-edit=${run.checks.planBeforeEdit} confidence-evidence=${run.checks.confidenceEvidence}`,
     gate,
     `malformed lines: ${run.malformed}`,
   ].join("\n");

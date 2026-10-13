@@ -10,7 +10,7 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const KODAELUS_HOOK_COMMANDS = new Set([
+export const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/kodaelus-session.mjs",
   "node ./hooks/block-git-when-kodaelus.mjs",
   "node ./hooks/guard-delete.mjs",
@@ -29,6 +29,7 @@ const KODAELUS_HOOK_COMMANDS = new Set([
   "node ./hooks/shell-evidence-recorder.mjs",
   "node ./hooks/tdd-order-guard.mjs",
   "node ./hooks/recommendation-insights-guard.mjs",
+  "node ./hooks/core-read-guard.mjs",
 ]);
 
 /** Relative paths under ~/.cursor/hooks removed on uninstall. */
@@ -78,6 +79,8 @@ export const KODAELUS_HOOK_RELATIVE_PATHS = [
   "lib/tdd-order-guard.mjs",
   "lib/cloud-runtime.mjs",
   "lib/recommendation-insights-guard.mjs",
+  "core-read-guard.mjs",
+  "lib/core-read-guard.mjs",
 ];
 
 export function mergeHooks(existing, template) {
@@ -156,7 +159,7 @@ export function uninstallUserHooks({ cursorHome }) {
     if (existsSync(file)) rmSync(file, { force: true });
   }
 
-  for (const rel of ["active-sessions.json", "active-sessions.json.lock"]) {
+  for (const rel of ["active-sessions.json", "active-sessions.json.lock", "core-reads.json"]) {
     const file = join(cursorHome, "kodaelus", rel);
     if (existsSync(file)) rmSync(file, { force: true });
   }

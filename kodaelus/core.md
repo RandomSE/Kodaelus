@@ -33,7 +33,7 @@ Recommend Mode Lite or Delivery Tier Lite for docs-only or single-file edits. Re
 
 Cursor cloud agents, SDK `runKodaelus`, and any session that does not load `~/.cursor/hooks.json` never fire dash, confidence, delivery-structure, git, or related guards. When hooks cannot load, self-enforce this contract.
 
-Treat hooks as absent for a Cursor cloud agent, SDK `runKodaelus`, or a session with no `hooks.json`.
+Treat hooks as absent for a Cursor cloud agent, SDK `runKodaelus`, or a session with no `hooks.json`. A cloud agent in another repo only sees files in that repo. `npm run install:project -- <path>` writes an alwaysApply rule and an AGENTS.md snippet whose first instruction is to Read `core.md`, then the active mode file. Work done without that read is invalid. The core-read guard does not run when hooks are absent.
 
 1. **Plan first.** Emit **Plan** (Delivery Tier, file count, blast radius, test command, `Confidence: NN% | Evidence: ...`) as the first assistant text before any mutating Write, StrReplace, ApplyPatch, or Delete. On headless/cloud, deny with **emit Plan first** when no Plan file-count estimate exists yet.
 2. **TDD write order.** For new behavior, the first new test file or failing test is written before product implementation. Parallel batching of tests and impl is a policy violation. Mode Lite is not blocked. Rust `tests/**/*.rs` counts as a test path. A failing test run must exist before product impl is TDD-complete.
@@ -179,6 +179,7 @@ Skills do not set mode. `detectKodaelusMode` does. Denies stay in hooks:
 
 | Hook | Role |
 |------|------|
+| `core-read-guard.mjs` | Blocks edit and shell until this session has Read `core.md`. Reads stay allowed. Allows the tool when `core.md` is not on disk. |
 | `guard-delete.mjs` | Backup, manifest, entry-point block; `isBugInvestigationMode` limits deletes |
 | `block-readonly-shell` | `isReadOnlyMode` denies workspace mutators |
 | `tdd-order-guard.mjs` | Main: failing test before product impl |
