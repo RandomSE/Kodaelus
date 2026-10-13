@@ -4,7 +4,7 @@
  * Usage: node install/install.mjs [--uninstall]
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   defaultCursorHome,
@@ -13,6 +13,7 @@ import {
   uninstallSessionRule,
   uninstallUserHooks,
 } from "./lib/user-hooks.mjs";
+import { installProject } from "./lib/project-install.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
@@ -35,6 +36,21 @@ const SKILL_TEMPLATES = [
   ["kodaelus-refactor.skill.md", "kodaelus-refactor"],
   ["kodaelus-architecture-review.skill.md", "kodaelus-architecture-review"],
 ];
+
+const projectIndex = process.argv.indexOf("--project");
+if (projectIndex !== -1) {
+  const targetArg = process.argv[projectIndex + 1];
+  if (!targetArg || targetArg.startsWith("-")) {
+    console.error("usage: node install/install.mjs --project <path>");
+    process.exit(1);
+  }
+  const targetRoot = resolve(targetArg);
+  installProject({ repoRoot, targetRoot });
+  console.log(`Kodaelus project install wrote policy, an alwaysApply rule, and an AGENTS.md snippet in ${targetRoot}`);
+  console.log("  First tool call must Read .cursor/kodaelus/core.md, then the active mode file.");
+  console.log("  Work done without that read is invalid.");
+  process.exit(0);
+}
 
 const uninstall = process.argv.includes("--uninstall");
 

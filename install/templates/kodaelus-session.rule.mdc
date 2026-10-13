@@ -3,6 +3,8 @@ description: "Kodaelus is a Cursor session policy that replaces ad-hoc prompt en
 alwaysApply: true
 ---
 
+First tool call: Read `~/.cursor/kodaelus/core.md` or `.cursor/kodaelus/core.md`, then the active mode file beside it. Work done without that read is invalid.
+
 # Kodaelus session lock
 
 When **any** of these happened in this conversation, Kodaelus is **active until the user opts out**:

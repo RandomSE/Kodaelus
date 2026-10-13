@@ -131,6 +131,18 @@ test("mode subagent templates name investigation or a read-only spec", () => {
   assert.match(promptAgent, /read-only paste-ready spec/i);
 });
 
+test("session rule body starts with the core.md read imperative", () => {
+  const body = sessionRule.split("---").slice(2).join("---").trim();
+  assert.match(body, /^First tool call:/);
+  assert.match(body, /Work done without that read is invalid/);
+  assert.match(body, /core\.md/);
+});
+
+test("README and package.json expose project install", () => {
+  assert.match(pkg.scripts["install:project"] ?? "", /install\.mjs --project/);
+  assert.match(readme, /install:project/);
+});
+
 test("AGENTS.md documents root and SDK tests plus README SDK heading", () => {
   const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf8");
   assert.ok(agents.includes("## SDK (CLI and programmatic API)"));

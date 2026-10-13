@@ -11,6 +11,7 @@
   },
   "scripts": {
     "install:global": "node install/install.mjs",
+    "install:project": "node install/install.mjs --project",
     "uninstall:global": "node install/install.mjs --uninstall",
     "test:hooks": "node scripts/run-node-tests.mjs install/hooks",
     "test:install": "node scripts/run-node-tests.mjs install/lib",

@@ -58,7 +58,7 @@ test("bad synthetic transcript fails every behavior check and is not a regressio
   assert.equal(run.checks.planBeforeEdit, "fail");
   assert.equal(run.checks.confidenceEvidence, "fail");
   assert.match(result.report, /test-before-edit=fail/);
-  assert.match(result.report, /core-read=fail/);
+  assert.match(result.report, /core\.md read before first edit\/shell=fail/);
   assert.match(result.report, /plan-before-edit=fail/);
   assert.match(result.report, /confidence-evidence=fail/);
 });
@@ -264,6 +264,29 @@ test("write-baseline records measured shares and refuses an empty drop", () => {
   assert.equal(empty.exitCode, 1);
   assert.equal(existsSync(join(emptyDir, "baseline.json")), false);
   assert.match(empty.report, /not writing baseline\.json/);
+});
+
+test("core.md read before first edit/shell fails when the read comes after a shell", () => {
+  const lines = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nWork.\nConfidence: 80% | Evidence: policy/core.md:1",
+    }),
+    JSON.stringify({ tool: "Shell", command: "npm test", exitCode: 1, content: "not ok" }),
+    JSON.stringify({ tool: "Read", path: "policy/core.md", content: "abcd" }),
+    JSON.stringify({ tool: "StrReplace", path: "src/module.txt", content: "abcd" }),
+  ].join("\n");
+  const { file } = tempJsonl("core-late.jsonl", lines);
+  const result = evaluatePath(file);
+  assert.equal(result.runs[0].checks.coreRead, "fail");
+  assert.match(result.report, /core\.md read before first edit\/shell=fail/);
+  assert.equal(result.runs[0].checks.testBeforeEdit, "pass");
+  assert.equal(result.runs[0].checks.planBeforeEdit, "pass");
+  assert.equal(result.runs[0].checks.confidenceEvidence, "pass");
+
+  const positive = evaluatePath(join(fixturesDir, "coreRead.positive.jsonl"));
+  assert.equal(positive.runs[0].checks.coreRead, "pass");
+  assert.match(positive.report, /core\.md read before first edit\/shell=pass/);
 });
 
 test("each behavior check has a positive and a negative fixture", () => {

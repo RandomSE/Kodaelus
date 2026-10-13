@@ -23,6 +23,10 @@
     ],
     "preToolUse": [
       {
+        "command": "node ./hooks/core-read-guard.mjs",
+        "matcher": "Read|Write|StrReplace|Delete|ApplyPatch"
+      },
+      {
         "command": "node ./hooks/scope-creep-guard.mjs",
         "matcher": "Write|StrReplace|Delete|ApplyPatch|MCP"
       },
@@ -131,6 +135,9 @@
       }
     ],
     "beforeShellExecution": [
+      {
+        "command": "node ./hooks/core-read-guard.mjs"
+      },
       {
         "command": "node ./hooks/block-git-when-kodaelus.mjs",
         "matcher": "\\bgit\\b|\\bgh\\s+(auth|repo|pr|issue|release|workflow|run)\\b"

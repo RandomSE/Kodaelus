@@ -16,7 +16,7 @@ npm run install:global
 - Modes: Main (0), Planner / Prompt (1), Bug Investigation (2), Suggest (3), Mode Lite (4), Question (5), Prepare (6), Ship (7).
 - `use kodaelus bug` investigates, `bugfix` / `use kodaelus bugfix` implements in Main.
 - Ship reports CI and may repair up to 3 product cycles after a red check (`ship ci continue` unlocks). It does not merge or force-push.
-- No `AGENTS.md` or `.cursor/rules` from this project needed.
+- Cloud agents in another repo do not see `~/.cursor`. From this checkout run `npm run install:project -- <path>` so that repo gets an alwaysApply rule and an `AGENTS.md` snippet. The first instruction is to Read `core.md`, then the active mode file. Work done without that read is invalid.
 
 ## Policy source
 
