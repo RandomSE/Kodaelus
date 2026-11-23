@@ -32,7 +32,10 @@ import { dirname, join } from "node:path";
 /**
  * @typedef {object} SessionMetadata
  * @property {number | null} planFileEstimate
+ * @property {boolean} scopeEstimateLocked
  * @property {string[]} touchedFiles
+ * @property {string[]} taskProductFiles
+ * @property {number} scopeBaseline
  * @property {boolean} scopeApproved
  * @property {PendingDelete[]} pendingDeletes
  * @property {SuggestSubMode | null} suggestSubMode
@@ -58,6 +61,10 @@ import {
   isMutatingMode,
   isReadOnlyMode,
 } from "./kodaelus-mode.mjs";
+import { isProductEditPath } from "./path-allowlist.mjs";
+
+/** Product files allowed before a `File count: N` line has been recorded. */
+export const SCOPE_UNPLANNED_PRODUCT_FLOOR = 10;
 
 export {
   detectExplicitMutatingUpgradeMode,
@@ -87,7 +94,10 @@ const LOCK_POLL_MS = 10;
 function emptyMetadata() {
   return {
     planFileEstimate: null,
+    scopeEstimateLocked: false,
     touchedFiles: [],
+    taskProductFiles: [],
+    scopeBaseline: 0,
     scopeApproved: false,
     pendingDeletes: [],
     suggestSubMode: null,
@@ -189,8 +199,15 @@ function normalizeMetadata(raw) {
   if (typeof record.planFileEstimate === "number" && record.planFileEstimate > 0) {
     base.planFileEstimate = record.planFileEstimate;
   }
+  if (record.scopeEstimateLocked === true) base.scopeEstimateLocked = true;
   if (Array.isArray(record.touchedFiles)) {
     base.touchedFiles = record.touchedFiles.filter((v) => typeof v === "string");
+  }
+  if (Array.isArray(record.taskProductFiles)) {
+    base.taskProductFiles = record.taskProductFiles.filter((v) => typeof v === "string");
+  }
+  if (typeof record.scopeBaseline === "number" && record.scopeBaseline >= 0) {
+    base.scopeBaseline = Math.floor(record.scopeBaseline);
   }
   if (record.scopeApproved === true) base.scopeApproved = true;
   if (record.suggestSubMode === "issues" || record.suggestSubMode === "features") {
@@ -487,7 +504,9 @@ export function setPlanFileEstimate(conversationId, estimate) {
     const store = readStoreUnlocked();
     if (!store.conversationIds.includes(conversationId)) return false;
     const meta = store.metadata[conversationId] ?? emptyMetadata();
+    if (meta.scopeEstimateLocked) return false;
     meta.planFileEstimate = estimate;
+    meta.scopeEstimateLocked = true;
     store.metadata[conversationId] = meta;
     writeStoreUnlocked(store);
     return true;
@@ -495,6 +514,30 @@ export function setPlanFileEstimate(conversationId, estimate) {
 }
 
 /**
+ * New user message: the next task gets a fresh product-file budget.
+ * `touchedFiles` stays so TDD can still see files from earlier tasks.
+ * @param {string} conversationId
+ */
+export function beginScopeTask(conversationId) {
+  if (!conversationId) return false;
+  return withStoreLock(() => {
+    const store = readStoreUnlocked();
+    if (!store.conversationIds.includes(conversationId)) return false;
+    const meta = store.metadata[conversationId] ?? emptyMetadata();
+    meta.planFileEstimate = null;
+    meta.scopeEstimateLocked = false;
+    meta.scopeBaseline = 0;
+    meta.taskProductFiles = [];
+    meta.scopeApproved = false;
+    store.metadata[conversationId] = meta;
+    writeStoreUnlocked(store);
+    return true;
+  });
+}
+
+/**
+ * Accept the product files already in this task and grant one more slack.
+ * Does not disable the guard for the rest of the chat.
  * @param {string} conversationId
  */
 export function approveScope(conversationId) {
@@ -503,7 +546,8 @@ export function approveScope(conversationId) {
     const store = readStoreUnlocked();
     if (!store.conversationIds.includes(conversationId)) return false;
     const meta = store.metadata[conversationId] ?? emptyMetadata();
-    meta.scopeApproved = true;
+    meta.scopeBaseline = meta.taskProductFiles.length;
+    meta.scopeApproved = false;
     store.metadata[conversationId] = meta;
     writeStoreUnlocked(store);
     return true;
@@ -524,6 +568,9 @@ export function recordTouchedFile(conversationId, relativePath) {
     if (!meta.touchedFiles.includes(normalized)) {
       meta.touchedFiles.push(normalized);
     }
+    if (isProductEditPath(normalized) && !meta.taskProductFiles.includes(normalized)) {
+      meta.taskProductFiles.push(normalized);
+    }
     store.metadata[conversationId] = meta;
     writeStoreUnlocked(store);
     return true;
@@ -534,10 +581,33 @@ export function recordTouchedFile(conversationId, relativePath) {
  * @param {string} conversationId
  * @returns {number}
  */
+/**
+ * Extra product files past `File count: N`. Half of N, rounded up, at least 2.
+ * With no N yet, re-arm still uses 2. The unplanned floor is separate.
+ * @param {number | null | undefined} estimate
+ * @returns {number}
+ */
+export function scopeSlackForEstimate(estimate) {
+  if (typeof estimate !== "number" || !Number.isFinite(estimate) || estimate <= 0) {
+    return 2;
+  }
+  return Math.max(2, Math.ceil(estimate / 2));
+}
+
+/**
+ * @param {string} conversationId
+ * @returns {number}
+ */
 export function getScopeLimit(conversationId) {
   const meta = getSessionMetadata(conversationId);
-  const estimate = meta?.planFileEstimate;
-  return Math.max(10, estimate ? estimate * 2 : 10);
+  const estimate = meta?.planFileEstimate ?? null;
+  const baseline = meta?.scopeBaseline ?? 0;
+  const slack = scopeSlackForEstimate(estimate);
+  // File count is recorded on afterAgentResponse, after this turn's tool calls.
+  // Until that line exists, allow the floor. After approval, baseline + slack
+  // is the new ceiling, and it can sit above the original N + slack.
+  const planned = estimate ? estimate + slack : SCOPE_UNPLANNED_PRODUCT_FLOOR;
+  return Math.max(planned, baseline + slack);
 }
 
 /**
@@ -546,10 +616,34 @@ export function getScopeLimit(conversationId) {
  */
 export function getScopeStatus(conversationId) {
   const meta = getSessionMetadata(conversationId);
-  const count = meta?.touchedFiles.length ?? 0;
+  const count = meta?.taskProductFiles.length ?? 0;
   const limit = getScopeLimit(conversationId);
-  const exceeded = count > limit && meta?.scopeApproved !== true;
+  const exceeded = count > limit;
   return { exceeded, count, limit };
+}
+
+/**
+ * Predict the product-file count if these paths were recorded.
+ * Does not write. Test and `.kodaelus` paths do not add. A call that adds
+ * nothing stays allowed even when the task is already over the limit.
+ * @param {string} conversationId
+ * @param {string[]} relativePaths
+ * @returns {{ exceeded: boolean, count: number, limit: number }}
+ */
+export function assessScopeEdit(conversationId, relativePaths) {
+  const meta = getSessionMetadata(conversationId);
+  const existing = meta?.taskProductFiles ?? [];
+  const known = new Set(existing);
+  let added = 0;
+  for (const rel of relativePaths ?? []) {
+    const normalized = `${rel ?? ""}`.replace(/\\/g, "/");
+    if (!normalized || !isProductEditPath(normalized) || known.has(normalized)) continue;
+    known.add(normalized);
+    added += 1;
+  }
+  const count = existing.length + added;
+  const limit = getScopeLimit(conversationId);
+  return { exceeded: added > 0 && count > limit, count, limit };
 }
 
 /**

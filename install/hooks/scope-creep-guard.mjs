@@ -20,7 +20,8 @@ import {
 } from "./lib/path-allowlist.mjs";
 import {
   approveScope,
-  getScopeStatus,
+  assessScopeEdit,
+  beginScopeTask,
   getSessionMetadata,
   getSessionMode,
   isBugInvestigationMode,
@@ -78,10 +79,10 @@ function denyScope(count, limit) {
     JSON.stringify({
       permission: "deny",
       user_message:
-        `Kodaelus scope guardrail: ${count} files touched (limit ${limit}). ` +
-        "Summarize the scope delta and reply **scope approved** to continue.",
+        `Kodaelus scope guardrail: ${count} product files this task (limit ${limit}). ` +
+        "Summarize the scope delta and reply **scope approved** to accept the current files and grant one more slack.",
       agent_message:
-        `Scope creep guardrail triggered (${count}/${limit} files). Pause, summarize delta, ask user to reply "scope approved".`,
+        `Scope creep guardrail triggered (${count}/${limit} product files this task). Pause, summarize delta, ask user to reply "scope approved". Approval grants one more slack and does not disable the guard.`,
     }) + "\n",
   );
   process.exit(0);
@@ -227,6 +228,8 @@ try {
     const prompt = `${input.prompt ?? ""}`;
     if (isScopeApprovePrompt(prompt)) {
       approveScope(conversationId);
+    } else {
+      beginScopeTask(conversationId);
     }
     allowEmpty();
   }
@@ -325,18 +328,22 @@ try {
     }
 
     const projectRoot = resolveProjectRoot(input, editPaths[0]);
+    /** @type {string[]} */
+    const rels = [];
     for (const editPath of editPaths) {
       try {
-        const rel = normalizeProjectPath(projectRoot, editPath);
-        recordTouchedFile(conversationId, rel);
+        rels.push(normalizeProjectPath(projectRoot, editPath));
       } catch {
         // Skip paths outside project root.
       }
     }
 
-    const { exceeded, count, limit } = getScopeStatus(conversationId);
+    const { exceeded, count, limit } = assessScopeEdit(conversationId, rels);
     if (exceeded) {
       denyScope(count, limit);
+    }
+    for (const rel of rels) {
+      recordTouchedFile(conversationId, rel);
     }
   }
 } catch {

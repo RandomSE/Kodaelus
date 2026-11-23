@@ -130,7 +130,7 @@ Bare **`use kodaelus suggest`** asks you to pick Issues vs Features before scann
 | **Read-only shell** | `block-readonly-shell` denies workspace mutators (`npm install`, `mkdir`, `npm run build`, file redirects `>` / `>>`, etc.) |
 | **Bug Investigation** | Deletes outside `.kodaelus/` blocked; `.kodaelus/` diagnostic artifacts allowed |
 | **Delete tool / shell rm** | Entry points hard-blocked; other deletes require automatic backup to `.kodaelus/trash/` + manifest |
-| **Scope creep** | Blocks edits past `max(10, 2× Plan file estimate)` until you reply **`scope approved`** |
+| **Scope creep** | Counts product files for the current user task (not tests, diagnostic paths, or `.kodaelus/**`). Allows `File count: N` plus slack (max(2, half of N rounded up)). Floor of 10 product files before that line is recorded. A new message resets the count. **`scope approved`** grants one more slack and does not disable the guard. |
 | **Confidence format** | Flags bare `Confidence: NN%` without adjacent `Evidence:` on substantive deliveries |
 | **AskQuestion guard** | In Main/Lite/Bug/Prepare, denies `AskQuestion`/`AskUserQuestion` **when Cursor fires `preToolUse` for those tools**; `stop` follow-up if open clarification prose is detected. Policy + Prompt ambiguity pre-emption remain primary |
 | **Project guidelines** | Bootstrapped on activation; `restore <file>` / `undo last delete` phrases restore from manifest |
