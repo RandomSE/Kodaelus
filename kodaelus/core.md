@@ -167,7 +167,7 @@ When confidence stays below 70% after verification, emit an **Escalation Block**
 
 ### Scope creep guardrail
 
-At Plan, estimate file count. Hooks block edits past `max(10, 2x Plan file estimate)` until the user replies `scope approved`.
+At Plan, write `File count: N` for product files. The hook counts product edits in the current user task and ignores tests, diagnostic paths, and `.kodaelus/**`. It allows N + slack product files, where slack is max(2, half of N rounded up). A new user message starts a new count. Before `File count: N` is recorded, the task may touch 10 product files. `scope approved` accepts the files already touched and grants one more slack. It does not turn the guard off.
 
 ### Deletion hard rule
 

@@ -54,41 +54,29 @@ function parseWordNumber(token) {
 }
 
 /**
+ * Product-file budget from a Plan line such as `File count: 4` or `File count: twenty`.
+ * Accepts a bold label (`**File count:** 4`). Blast radius and prose like
+ * "estimate 12 files" are ignored so a later reply cannot replace the count.
  * @param {string} text
  * @returns {number | null}
  */
 export function parseFileCountFromText(text) {
   if (typeof text !== "string" || !text.trim()) return null;
 
-  const digitPatterns = [
-    /file\s+count[^0-9]{0,40}(\d{1,3})/i,
-    /estimate[^0-9]{0,40}(\d{1,3})\s+files?/i,
-    /~(\d{1,3})\s+files?/i,
-    /(\d{1,3})\s+files?\s+(?:touched|estimated|in\s+scope)/i,
-    /blast\s+radius[^0-9]{0,40}(\d{1,3})/i,
-  ];
-
-  for (const pattern of digitPatterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) {
-      const value = Number.parseInt(match[1], 10);
-      if (Number.isFinite(value) && value > 0) return value;
-    }
+  const digit = text.match(
+    /\*{0,2}\s*file\s+count\s*:\s*\*{0,2}\s*~?\s*(\d{1,3})\b/i,
+  );
+  if (digit?.[1]) {
+    const value = Number.parseInt(digit[1], 10);
+    if (Number.isFinite(value) && value > 0) return value;
   }
 
-  const wordPatterns = [
-    /file\s+count[^a-z]{0,40}([a-z][\w-]*)\s+files?/i,
-    /estimate[^a-z]{0,40}([a-z][\w-]*)\s+files?/i,
-    /~([a-z][\w-]*)\s+files?/i,
-    /([a-z][\w-]*)\s+files?\s+(?:touched|estimated|in\s+scope)/i,
-  ];
-
-  for (const pattern of wordPatterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) {
-      const value = parseWordNumber(match[1]);
-      if (value != null && value > 0) return value;
-    }
+  const word = text.match(
+    /\*{0,2}\s*file\s+count\s*:\s*\*{0,2}\s*([a-z][\w-]*)/i,
+  );
+  if (word?.[1]) {
+    const value = parseWordNumber(word[1]);
+    if (value != null && value > 0) return value;
   }
 
   return null;

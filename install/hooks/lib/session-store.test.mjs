@@ -8,9 +8,12 @@ import {
   deactivateSession,
   detectKodaelusMode,
   detectSuggestSubMode,
+  approveScope,
   getScopeStatus,
+  getSessionMetadata,
   getSessionMode,
   isActivatePrompt,
+  setPlanFileEstimate,
   isDeactivatePrompt,
   isMutatingMode,
   isReadOnlyMode,
@@ -264,6 +267,110 @@ test("ship CI repair allows 3 product fixes then caps until ship ci continue", a
   store.recordShipCiPoll("conv-ship-ci", "pending");
   assert.equal(store.isShipCiPollLimited("conv-ship-ci"), true);
   deactivateSession("conv-ship-ci");
+});
+
+test("product file budget is N plus slack, not max(10, 2N)", () => {
+  activateSession("conv-slack", "main");
+  setPlanFileEstimate("conv-slack", 4);
+  for (let i = 0; i < 6; i += 1) {
+    recordTouchedFile("conv-slack", `src/p-${i}.ts`);
+  }
+
+  const atSlack = getScopeStatus("conv-slack");
+  assert.equal(atSlack.count, 6);
+  assert.equal(atSlack.limit, 6);
+  assert.equal(atSlack.exceeded, false);
+
+  recordTouchedFile("conv-slack", "src/p-6.ts");
+  assert.equal(getScopeStatus("conv-slack").exceeded, true);
+  deactivateSession("conv-slack");
+});
+
+test("odd File count uses half rounded up as slack", () => {
+  activateSession("conv-slack-odd", "main");
+  setPlanFileEstimate("conv-slack-odd", 5);
+  assert.equal(getScopeStatus("conv-slack-odd").limit, 8);
+  deactivateSession("conv-slack-odd");
+});
+
+test("tests and .kodaelus paths do not consume the product budget", () => {
+  activateSession("conv-companions", "main");
+  recordTouchedFile("conv-companions", "install/hooks/lib/plan-estimate.test.mjs");
+  recordTouchedFile("conv-companions", "tests/engine.rs");
+  recordTouchedFile("conv-companions", ".kodaelus/HANDOFF.md");
+  recordTouchedFile("conv-companions", "src/lib.ts");
+
+  const status = getScopeStatus("conv-companions");
+  assert.equal(status.count, 1);
+  assert.equal(getSessionMetadata("conv-companions")?.touchedFiles.length, 4);
+  deactivateSession("conv-companions");
+});
+
+test("the first File count locks and a later count cannot replace it", () => {
+  activateSession("conv-lock", "main");
+  assert.equal(setPlanFileEstimate("conv-lock", 4), true);
+  assert.equal(setPlanFileEstimate("conv-lock", 40), false);
+  assert.equal(getSessionMetadata("conv-lock")?.planFileEstimate, 4);
+  deactivateSession("conv-lock");
+});
+
+test("beginScopeTask clears the task window and unlocks File count", async () => {
+  const store = await import("./session-store.mjs");
+  assert.equal(typeof store.beginScopeTask, "function");
+  store.activateSession("conv-window", "main");
+  store.setPlanFileEstimate("conv-window", 4);
+  store.recordTouchedFile("conv-window", "src/a.ts");
+  store.recordTouchedFile("conv-window", "src/a.test.ts");
+
+  assert.equal(store.beginScopeTask("conv-window"), true);
+
+  const meta = store.getSessionMetadata("conv-window");
+  assert.equal(meta?.planFileEstimate, null);
+  assert.equal(meta?.scopeBaseline, 0);
+  assert.deepEqual(meta?.taskProductFiles, []);
+  assert.deepEqual(meta?.touchedFiles, ["src/a.ts", "src/a.test.ts"]);
+  assert.equal(store.setPlanFileEstimate("conv-window", 9), true);
+  store.deactivateSession("conv-window");
+});
+
+test("approveScope grants one slack and does not allow unlimited product files", () => {
+  activateSession("conv-rearm", "main");
+  setPlanFileEstimate("conv-rearm", 4);
+  for (let i = 0; i < 6; i += 1) {
+    recordTouchedFile("conv-rearm", `src/r-${i}.ts`);
+  }
+
+  approveScope("conv-rearm");
+  assert.equal(getSessionMetadata("conv-rearm")?.scopeBaseline, 6);
+  assert.equal(getScopeStatus("conv-rearm").limit, 8);
+  assert.equal(getScopeStatus("conv-rearm").exceeded, false);
+
+  recordTouchedFile("conv-rearm", "src/r-6.ts");
+  recordTouchedFile("conv-rearm", "src/r-7.ts");
+  assert.equal(getScopeStatus("conv-rearm").exceeded, false);
+  recordTouchedFile("conv-rearm", "src/r-8.ts");
+  assert.equal(getScopeStatus("conv-rearm").exceeded, true);
+  deactivateSession("conv-rearm");
+});
+
+test("assessScopeEdit denies a batch that would pass the limit and does not require recording", async () => {
+  const store = await import("./session-store.mjs");
+  assert.equal(typeof store.assessScopeEdit, "function");
+  store.activateSession("conv-batch", "main");
+  store.setPlanFileEstimate("conv-batch", 4);
+  for (let i = 0; i < 5; i += 1) {
+    store.recordTouchedFile("conv-batch", `src/b-${i}.ts`);
+  }
+
+  const preview = store.assessScopeEdit("conv-batch", [
+    "src/b-5.ts",
+    "src/b-6.ts",
+    "src/b-5.test.ts",
+  ]);
+  assert.equal(preview.exceeded, true);
+  assert.equal(preview.limit, 6);
+  assert.equal(store.getScopeStatus("conv-batch").count, 5);
+  store.deactivateSession("conv-batch");
 });
 
 test("recordFirstFailingTest persists cargo/npm stdout", async () => {
