@@ -166,6 +166,48 @@ test("blast radius does not set or replace File count", async () => {
   deactivateSession("conv-blast");
 });
 
+test("generic test, fixture, and testdata paths do not trip the scope guard", async () => {
+  activateSession("conv-generic-tests", "main");
+  const paths = [
+    "src/FooTest.java",
+    "src/FooTests.cs",
+    "tests/test_parser.py",
+    "pkg/foo_test.go",
+    "test/support/setup.js",
+    "__tests__/index.js",
+    "spec/models/user.rb",
+    "src/test/java/com/Foo.java",
+    "tests/fixtures/data.json",
+    "testdata/input.txt",
+    "src/__snapshots__/a.snap",
+    "src/user.fixture.json",
+  ];
+  for (const path of paths) {
+    const { stdout } = await runHook({
+      hook_event_name: "preToolUse",
+      conversation_id: "conv-generic-tests",
+      tool_name: "Write",
+      tool_input: { path },
+      workspace_roots: [tempHome],
+    });
+    assert.deepEqual(JSON.parse(stdout), { permission: "allow" }, path);
+  }
+  assert.equal(getSessionMetadata("conv-generic-tests")?.taskProductFiles.length, 0);
+
+  for (let i = 0; i < 10; i += 1) {
+    recordTouchedFile("conv-generic-tests", `src/kept-${i}.ts`);
+  }
+  const extra = await runHook({
+    hook_event_name: "preToolUse",
+    conversation_id: "conv-generic-tests",
+    tool_name: "Write",
+    tool_input: { path: "src/latest.ts" },
+    workspace_roots: [tempHome],
+  });
+  assert.equal(JSON.parse(extra.stdout).permission, "deny");
+  deactivateSession("conv-generic-tests");
+});
+
 test("eleven test files do not trip the scope guard", async () => {
   activateSession("conv-tests", "main");
 

@@ -1,14 +1,27 @@
 /**
  * Shared path allowlists for Bug Investigation writes, Suggest artifacts,
- * secrets fixtures, and Prepare product-edit exceptions.
+ * secrets fixtures, the product-file budget, and Prepare product-edit exceptions.
  */
 
 import { SUGGESTIONS_DIR_REL } from "./suggestions-diff.mjs";
 import { isKodaelusArtifactPath } from "./deletion-guard.mjs";
 
-const TEST_FILE_RE = /\.(?:test|spec)\.[^/]+$/i;
-const UNDERSCORE_TEST_RE = /_test\.[^/]+$/i;
-const RUST_TESTS_DIR_RE = /(?:^|\/)tests\/.+\.rs$/i;
+/** `*.test.*`, `*.tests.*`, `*.spec.*`, `*.specs.*` */
+const TEST_FILE_RE = /\.(?:tests?|specs?)\.[^/]+$/i;
+/** `*_test.*`, `*_tests.*`, `*_spec.*`, `*_specs.*` (Go, Rust, RSpec). */
+const UNDERSCORE_TEST_RE = /_(?:tests?|specs?)\.[^/]+$/i;
+/** `test_*.py` and the same prefix in other languages. */
+const TEST_PREFIX_RE = /^test_/i;
+/** `fixture.json`, `user.fixture.json`, `user_fixture.json`. */
+const FIXTURE_FILE_RE = /(?:^|[._-])fixtures?(?:\.[^/]+)+$/i;
+/**
+ * Directory segments that are test trees. `testing/` and `test-utils/` stay product.
+ * `specs` is the plural of `spec`, same as `tests` / `test`.
+ */
+const TEST_DIR_RE = /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|$)/i;
+/** Fixture and test-data directories, including Jest snapshot folders. */
+const TEST_DATA_DIR_RE =
+  /(?:^|\/)(?:__fixtures__|__snapshots__|fixtures?|testdata|test-data|test_data)(?:\/|$)/i;
 const DIAGNOSTIC_DIR_RE =
   /(?:^|\/)(?:debug|diag|diagnostic|instrument|instrumentation|repro)(?:\/|$)/i;
 const DIAGNOSTIC_FILE_RE =
@@ -23,18 +36,37 @@ export function normalizeRelPath(relativePath) {
 }
 
 /**
+ * Java/C#/Kotlin `FooTest.ext` / `FooTests.ext`.
+ * Case-sensitive so `latest.ts` and `contest.ts` stay product files.
+ * @param {string} base
+ * @returns {boolean}
+ */
+function isPascalTestFile(base) {
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const stem = base.slice(0, dot);
+  return stem.endsWith("Test") || stem.endsWith("Tests");
+}
+
+/**
+ * Test file, test tree, or test fixture/data. Project-agnostic.
+ * Excluded from the product-file budget. Source files stay included.
  * @param {string} relativePath
  * @returns {boolean}
  */
 export function isTestOrSpecPath(relativePath) {
   const normalized = normalizeRelPath(relativePath);
   if (!normalized) return false;
-  const base = normalized.split("/").pop() ?? normalized;
+  const base = normalized.split("/").pop() ?? "";
+  if (!base || base === "." || base === "..") return false;
   return (
     TEST_FILE_RE.test(base) ||
-    TEST_FILE_RE.test(normalized) ||
     UNDERSCORE_TEST_RE.test(base) ||
-    RUST_TESTS_DIR_RE.test(normalized)
+    TEST_PREFIX_RE.test(base) ||
+    FIXTURE_FILE_RE.test(base) ||
+    isPascalTestFile(base) ||
+    TEST_DIR_RE.test(normalized) ||
+    TEST_DATA_DIR_RE.test(normalized)
   );
 }
 
@@ -131,7 +163,8 @@ export function isSecretsFixturePath(relativePath) {
 }
 
 /**
- * Product paths (not test/diagnostic/.kodaelus) for Prepare fix-cycle cap.
+ * Product paths for the file budget, Prepare fix-cycle cap, and Ship CI repairs.
+ * Test files, diagnostic paths, and `.kodaelus/**` are not product files.
  * @param {string} relativePath
  * @returns {boolean}
  */

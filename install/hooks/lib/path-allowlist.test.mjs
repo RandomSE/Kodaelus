@@ -69,6 +69,14 @@ test("isProductEditPath excludes diagnostic allowlist", () => {
   assert.equal(isProductEditPath("src/app.ts"), true);
   assert.equal(isProductEditPath("src/app.test.ts"), false);
   assert.equal(isProductEditPath(".kodaelus/bugs/d.md"), false);
+  assert.equal(isProductEditPath("src/latest.ts"), true);
+  assert.equal(isProductEditPath("src/contest.ts"), true);
+  assert.equal(isProductEditPath("src/testing/helper.ts"), true);
+  assert.equal(isProductEditPath("src/test-utils/helper.ts"), true);
+  assert.equal(isProductEditPath("src/fixtureLoader.ts"), true);
+  assert.equal(isProductEditPath("src/LightFixture.ts"), true);
+  assert.equal(isProductEditPath("src/FooTest.java"), false);
+  assert.equal(isProductEditPath("tests/fixtures/data.json"), false);
 });
 
 test("isAllowedSuggestShellCommand allows mkdir under suggestions", () => {
@@ -141,4 +149,53 @@ test("tool name helpers", () => {
   assert.equal(isTestOrSpecPath("src/engine.rs"), false);
   assert.equal(isTestOrSpecPath("src/foo_test.rs"), true);
   assert.equal(isDiagnosticInstrumentationPath("diag/out.log"), true);
+});
+
+test("isTestOrSpecPath matches generic test trees, names, and fixtures", () => {
+  const tests = [
+    "src/sample.test.mjs",
+    "src/sample.spec.ts",
+    "src/sample.tests.ts",
+    "src/foo_test.go",
+    "src/foo_spec.rb",
+    "src/FooTest.java",
+    "src/FooTests.cs",
+    "src/URLTest.java",
+    "tests/test_parser.py",
+    "test/support/setup.js",
+    "__tests__/index.js",
+    "spec/models/user.rb",
+    "specs/a.ts",
+    "src/test/java/com/Foo.java",
+    "tests/fixtures/data.json",
+    "testdata/input.txt",
+    "src/__fixtures__/case.json",
+    "src/__snapshots__/a.snap",
+    "src/user.fixture.json",
+    "test-data/case.json",
+    "test_data/case.json",
+  ];
+  for (const rel of tests) {
+    assert.equal(isTestOrSpecPath(rel), true, rel);
+    assert.equal(isProductEditPath(rel), false, rel);
+  }
+
+  const source = [
+    "src/app.ts",
+    "src/latest.ts",
+    "src/contest.ts",
+    "src/testing/helper.ts",
+    "src/test-utils/helper.ts",
+    "src/specification/api.ts",
+    "src/special/case.ts",
+    "src/fixtureLoader.ts",
+    "src/LightFixture.ts",
+    "pkg/widget.go",
+    "src/main/java/com/App.java",
+    "src/test.py",
+  ];
+  for (const rel of source) {
+    assert.equal(isTestOrSpecPath(rel), false, rel);
+    assert.equal(isProductEditPath(rel), true, rel);
+  }
 });
