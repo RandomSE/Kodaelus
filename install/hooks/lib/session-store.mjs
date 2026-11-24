@@ -624,8 +624,9 @@ export function getScopeStatus(conversationId) {
 
 /**
  * Predict the product-file count if these paths were recorded.
- * Does not write. Test and `.kodaelus` paths do not add. A call that adds
- * nothing stays allowed even when the task is already over the limit.
+ * Does not write. Test files (see `isTestOrSpecPath`), diagnostic paths, and
+ * `.kodaelus/**` do not add. A call that adds nothing stays allowed even when
+ * the task is already over the limit.
  * @param {string} conversationId
  * @param {string[]} relativePaths
  * @returns {{ exceeded: boolean, count: number, limit: number }}

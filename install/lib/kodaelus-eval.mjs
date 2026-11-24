@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isTestOrSpecPath } from "../hooks/lib/path-allowlist.mjs";
 
 const CATEGORIES = ["reads", "re-reads", "search", "edits", "reasoning", "tool-output"];
 const DEFAULT_TEST_COMMANDS = [/(?:^|\s)(?:npm test|node --test|pytest|cargo test|go test)(?:\s|$)/];
@@ -860,8 +861,7 @@ function isCorePath(path) {
  * @param {string} path
  */
 function isTestPath(path) {
-  const normalized = normalizePath(path);
-  return /\.test\.|\.spec\.|_test\.|(^|\/)tests\//.test(normalized);
+  return isTestOrSpecPath(normalizePath(path));
 }
 
 /**

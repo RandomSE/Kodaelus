@@ -295,14 +295,30 @@ test("odd File count uses half rounded up as slack", () => {
 
 test("tests and .kodaelus paths do not consume the product budget", () => {
   activateSession("conv-companions", "main");
-  recordTouchedFile("conv-companions", "install/hooks/lib/plan-estimate.test.mjs");
-  recordTouchedFile("conv-companions", "tests/engine.rs");
-  recordTouchedFile("conv-companions", ".kodaelus/HANDOFF.md");
+  const ignored = [
+    "install/hooks/lib/plan-estimate.test.mjs",
+    "tests/engine.rs",
+    ".kodaelus/HANDOFF.md",
+    "src/FooTest.java",
+    "src/FooTests.cs",
+    "tests/test_parser.py",
+    "pkg/foo_test.go",
+    "test/support/setup.js",
+    "__tests__/index.js",
+    "spec/models/user.rb",
+    "tests/fixtures/data.json",
+    "testdata/input.txt",
+    "src/__snapshots__/a.snap",
+    "src/user.fixture.json",
+  ];
+  for (const rel of ignored) recordTouchedFile("conv-companions", rel);
   recordTouchedFile("conv-companions", "src/lib.ts");
+  recordTouchedFile("conv-companions", "src/latest.ts");
+  recordTouchedFile("conv-companions", "src/testing/helper.ts");
 
   const status = getScopeStatus("conv-companions");
-  assert.equal(status.count, 1);
-  assert.equal(getSessionMetadata("conv-companions")?.touchedFiles.length, 4);
+  assert.equal(status.count, 3);
+  assert.equal(getSessionMetadata("conv-companions")?.touchedFiles.length, ignored.length + 3);
   deactivateSession("conv-companions");
 });
 

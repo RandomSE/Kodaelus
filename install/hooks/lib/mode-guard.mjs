@@ -72,7 +72,7 @@ export function denyBugModeWrite(relativePath) {
     permission: "deny",
     user_message:
       `Bug Investigation mode blocks product edits to "${relativePath}". ` +
-      "Allowed: .kodaelus/**, *.test.*/*.spec.*, and diagnostic/instrumentation paths. " +
+      "Allowed: .kodaelus/**, test files, and diagnostic/instrumentation paths. " +
       "Reply **use kodaelus bugfix** to ship a fix.",
     agent_message:
       `Bug Investigation mode: Write/StrReplace/ApplyPatch denied for "${relativePath}". ` +

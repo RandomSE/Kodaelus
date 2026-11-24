@@ -6,7 +6,7 @@ Bug fixes follow reproduction-first: a failing test or documented repro precedes
 
 ### TDD write order
 
-The first new `*.test.*` / `*_test.*` / `tests/**` / `*.spec.*` file, or a failing test in an existing test file, lands before product implementation for that behavior. Parallel batching is a violation. If it happened, the Delivery Self-Check row is Fail even if tests later pass. Rust `tests/**/*.rs` counts. Hook-absent sessions follow the same rule.
+The first new test file, or a failing test in an existing test file, lands before product implementation for that behavior. A test file is the same set the scope guard ignores: paths under `test` / `tests` / `__tests__` / `spec` / `specs`, fixture and testdata paths, and names such as `*.test(s).*`, `*.spec(s).*`, `*Test(s).*`, `test_*`, and `*_test(s).*`. Parallel batching is a violation. If it happened, the Delivery Self-Check row is Fail even if tests later pass. Hook-absent sessions follow the same rule.
 
 ### Flake detection
 

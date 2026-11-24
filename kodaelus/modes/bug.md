@@ -6,7 +6,7 @@ Difficult, recurring bugs. Goal is full understanding and a **Bug Investigation 
 
 - Investigation first. Fix is deferred until `use kodaelus bugfix`.
 - Allowed: read, search, diagnostics, temporary logging, repro tests, trace scripts, artifacts under `.kodaelus/bugs/`.
-- **Hook write allowlist:** Write/StrReplace/ApplyPatch only for `.kodaelus/**`, `*.test.*` / `*.spec.*`, and diagnostic paths. Product source edits are denied.
+- **Hook write allowlist:** Write/StrReplace/ApplyPatch only for `.kodaelus/**`, test files (the same paths the scope guard ignores), and diagnostic paths. Product source edits are denied.
 - Not allowed: ship the fix, unrelated refactor, whole-file deletes outside `.kodaelus/`, claim the bug is fixed.
 - Reproduction-first. If non-deterministic, an instrumentation diff is mandatory.
 - Escalate hypotheses that stay below 70%.

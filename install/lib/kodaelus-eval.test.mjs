@@ -384,6 +384,32 @@ test("failing dotnet build before a product edit passes test-before-edit", () =>
   assert.equal(result.runs[0].checks.coreRead, "pass");
 });
 
+test("test trees and fixture paths are not product edits", () => {
+  const header = [
+    JSON.stringify({
+      role: "assistant",
+      content: "## Plan\nTests only.\nConfidence: 80% | Evidence: src/FooTest.java:1",
+    }),
+    JSON.stringify({ tool: "Read", path: "kodaelus/core.md", content: "abcd" }),
+  ];
+  const onlyTests = [
+    ...header,
+    JSON.stringify({ tool: "StrReplace", path: "src/test/java/FooTest.java", content: "b" }),
+    JSON.stringify({ tool: "StrReplace", path: "tests/test_foo.py", content: "b" }),
+    JSON.stringify({ tool: "StrReplace", path: "testdata/input.txt", content: "b" }),
+  ].join("\n");
+  const testsOnly = evaluatePath(tempJsonl("test-paths.jsonl", onlyTests).file);
+  assert.equal(testsOnly.runs[0].checks.testBeforeEdit, "skip");
+
+  const withSource = [
+    ...header,
+    JSON.stringify({ tool: "StrReplace", path: "src/latest.ts", content: "b" }),
+  ].join("\n");
+  const source = evaluatePath(tempJsonl("source-path.jsonl", withSource).file);
+  assert.equal(source.runs[0].checks.testBeforeEdit, "fail");
+  assert.equal(source.runs[0].checks.coreRead, "pass");
+});
+
 test("dotnet run before a product edit does not satisfy test-before-edit", () => {
   const lines = [
     JSON.stringify({
